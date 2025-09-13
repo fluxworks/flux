@@ -162,6 +162,11 @@ pub mod boxed
     pub use std::boxed::{ * };
 }
 
+pub mod cmp
+{
+    pub use std::cmp::{ * };
+}
+
 pub mod collections
 {
     pub use std::collections::{ * };
@@ -5784,13 +5789,13 @@ pub mod mem
         */
         pub mod arch
         {
+            /*!
+            A module with low-level architecture dependent routines. */
             use ::
             {
                 *,
             };
-            /*!
-            A module with low-level architecture dependent routines. */
-
+            
             pub mod all
             {
                 /*!
@@ -5864,9 +5869,7 @@ pub mod mem
                             end: *const u8,
                         ) -> Option<*const u8>
                         {
-                            if start >= end {
-                                return None;
-                            }
+                            if start >= end { return None; }
                             let confirm = |b| self.confirm(b);
                             let len = end.distance(start);
                             if len < USIZE_BYTES {
@@ -5905,9 +5908,7 @@ pub mod mem
                             end: *const u8,
                         ) -> Option<*const u8> 
                         {
-                            if start >= end {
-                                return None;
-                            }
+                            if start >= end { return None; }
                             let confirm = |b| self.confirm(b);
                             let len = end.distance(start);
                             if len < USIZE_BYTES {
@@ -6065,9 +6066,7 @@ pub mod mem
                             end: *const u8,
                         ) -> Option<*const u8>
                         {
-                            if start >= end {
-                                return None;
-                            }
+                            if start >= end { return None; }
                             let confirm = |b| self.confirm(b);
                             let len = end.distance(start);
                             if len < USIZE_BYTES {
@@ -6102,9 +6101,7 @@ pub mod mem
                             end: *const u8,
                         ) -> Option<*const u8> 
                         {
-                            if start >= end {
-                                return None;
-                            }
+                            if start >= end { return None; }
                             let confirm = |b| self.confirm(b);
                             let len = end.distance(start);
                             if len < USIZE_BYTES {
@@ -6221,9 +6218,7 @@ pub mod mem
                             end: *const u8,
                         ) -> Option<*const u8>
                         {
-                            if start >= end {
-                                return None;
-                            }
+                            if start >= end { return None; }
                             let confirm = |b| self.confirm(b);
                             let len = end.distance(start);
                             if len < USIZE_BYTES {
@@ -6258,9 +6253,7 @@ pub mod mem
                             end: *const u8,
                         ) -> Option<*const u8>
                         {
-                            if start >= end {
-                                return None;
-                            }
+                            if start >= end { return None; }
                             let confirm = |b| self.confirm(b);
                             let len = end.distance(start);
                             if len < USIZE_BYTES {
@@ -6357,116 +6350,3763 @@ pub mod mem
 
                 pub mod packedpair
                 {
+                    /*!
+                    Provides an architecture independent implementation of the "packed pair" algorithm. */
                     use ::
                     {
                         *,
                     };
                     /*
                     */
+                    use ::mem::chr::memchr;
+
+                    pub mod default_rank
+                    {
+                        use ::
+                        {
+                            *,
+                        };
+                        /*
+                        */
+                        pub const RANK: [u8; 256] = 
+                        [
+                            55,  // '\x00'
+                            52,  // '\x01'
+                            51,  // '\x02'
+                            50,  // '\x03'
+                            49,  // '\x04'
+                            48,  // '\x05'
+                            47,  // '\x06'
+                            46,  // '\x07'
+                            45,  // '\x08'
+                            103, // '\t'
+                            242, // '\n'
+                            66,  // '\x0b'
+                            67,  // '\x0c'
+                            229, // '\r'
+                            44,  // '\x0e'
+                            43,  // '\x0f'
+                            42,  // '\x10'
+                            41,  // '\x11'
+                            40,  // '\x12'
+                            39,  // '\x13'
+                            38,  // '\x14'
+                            37,  // '\x15'
+                            36,  // '\x16'
+                            35,  // '\x17'
+                            34,  // '\x18'
+                            33,  // '\x19'
+                            56,  // '\x1a'
+                            32,  // '\x1b'
+                            31,  // '\x1c'
+                            30,  // '\x1d'
+                            29,  // '\x1e'
+                            28,  // '\x1f'
+                            255, // ' '
+                            148, // '!'
+                            164, // '"'
+                            149, // '#'
+                            136, // '$'
+                            160, // '%'
+                            155, // '&'
+                            173, // "'"
+                            221, // '('
+                            222, // ')'
+                            134, // '*'
+                            122, // '+'
+                            232, // ','
+                            202, // '-'
+                            215, // '.'
+                            224, // '/'
+                            208, // '0'
+                            220, // '1'
+                            204, // '2'
+                            187, // '3'
+                            183, // '4'
+                            179, // '5'
+                            177, // '6'
+                            168, // '7'
+                            178, // '8'
+                            200, // '9'
+                            226, // ':'
+                            195, // ';'
+                            154, // '<'
+                            184, // '='
+                            174, // '>'
+                            126, // '?'
+                            120, // '@'
+                            191, // 'A'
+                            157, // 'B'
+                            194, // 'C'
+                            170, // 'D'
+                            189, // 'E'
+                            162, // 'F'
+                            161, // 'G'
+                            150, // 'H'
+                            193, // 'I'
+                            142, // 'J'
+                            137, // 'K'
+                            171, // 'L'
+                            176, // 'M'
+                            185, // 'N'
+                            167, // 'O'
+                            186, // 'P'
+                            112, // 'Q'
+                            175, // 'R'
+                            192, // 'S'
+                            188, // 'T'
+                            156, // 'U'
+                            140, // 'V'
+                            143, // 'W'
+                            123, // 'X'
+                            133, // 'Y'
+                            128, // 'Z'
+                            147, // '['
+                            138, // '\\'
+                            146, // ']'
+                            114, // '^'
+                            223, // '_'
+                            151, // '`'
+                            249, // 'a'
+                            216, // 'b'
+                            238, // 'c'
+                            236, // 'd'
+                            253, // 'e'
+                            227, // 'f'
+                            218, // 'g'
+                            230, // 'h'
+                            247, // 'i'
+                            135, // 'j'
+                            180, // 'k'
+                            241, // 'l'
+                            233, // 'm'
+                            246, // 'n'
+                            244, // 'o'
+                            231, // 'p'
+                            139, // 'q'
+                            245, // 'r'
+                            243, // 's'
+                            251, // 't'
+                            235, // 'u'
+                            201, // 'v'
+                            196, // 'w'
+                            240, // 'x'
+                            214, // 'y'
+                            152, // 'z'
+                            182, // '{'
+                            205, // '|'
+                            181, // '}'
+                            127, // '~'
+                            27,  // '\x7f'
+                            212, // '\x80'
+                            211, // '\x81'
+                            210, // '\x82'
+                            213, // '\x83'
+                            228, // '\x84'
+                            197, // '\x85'
+                            169, // '\x86'
+                            159, // '\x87'
+                            131, // '\x88'
+                            172, // '\x89'
+                            105, // '\x8a'
+                            80,  // '\x8b'
+                            98,  // '\x8c'
+                            96,  // '\x8d'
+                            97,  // '\x8e'
+                            81,  // '\x8f'
+                            207, // '\x90'
+                            145, // '\x91'
+                            116, // '\x92'
+                            115, // '\x93'
+                            144, // '\x94'
+                            130, // '\x95'
+                            153, // '\x96'
+                            121, // '\x97'
+                            107, // '\x98'
+                            132, // '\x99'
+                            109, // '\x9a'
+                            110, // '\x9b'
+                            124, // '\x9c'
+                            111, // '\x9d'
+                            82,  // '\x9e'
+                            108, // '\x9f'
+                            118, // '\xa0'
+                            141, // '¡'
+                            113, // '¢'
+                            129, // '£'
+                            119, // '¤'
+                            125, // '¥'
+                            165, // '¦'
+                            117, // '§'
+                            92,  // '¨'
+                            106, // '©'
+                            83,  // 'ª'
+                            72,  // '«'
+                            99,  // '¬'
+                            93,  // '\xad'
+                            65,  // '®'
+                            79,  // '¯'
+                            166, // '°'
+                            237, // '±'
+                            163, // '²'
+                            199, // '³'
+                            190, // '´'
+                            225, // 'µ'
+                            209, // '¶'
+                            203, // '·'
+                            198, // '¸'
+                            217, // '¹'
+                            219, // 'º'
+                            206, // '»'
+                            234, // '¼'
+                            248, // '½'
+                            158, // '¾'
+                            239, // '¿'
+                            255, // 'À'
+                            255, // 'Á'
+                            255, // 'Â'
+                            255, // 'Ã'
+                            255, // 'Ä'
+                            255, // 'Å'
+                            255, // 'Æ'
+                            255, // 'Ç'
+                            255, // 'È'
+                            255, // 'É'
+                            255, // 'Ê'
+                            255, // 'Ë'
+                            255, // 'Ì'
+                            255, // 'Í'
+                            255, // 'Î'
+                            255, // 'Ï'
+                            255, // 'Ð'
+                            255, // 'Ñ'
+                            255, // 'Ò'
+                            255, // 'Ó'
+                            255, // 'Ô'
+                            255, // 'Õ'
+                            255, // 'Ö'
+                            255, // '×'
+                            255, // 'Ø'
+                            255, // 'Ù'
+                            255, // 'Ú'
+                            255, // 'Û'
+                            255, // 'Ü'
+                            255, // 'Ý'
+                            255, // 'Þ'
+                            255, // 'ß'
+                            255, // 'à'
+                            255, // 'á'
+                            255, // 'â'
+                            255, // 'ã'
+                            255, // 'ä'
+                            255, // 'å'
+                            255, // 'æ'
+                            255, // 'ç'
+                            255, // 'è'
+                            255, // 'é'
+                            255, // 'ê'
+                            255, // 'ë'
+                            255, // 'ì'
+                            255, // 'í'
+                            255, // 'î'
+                            255, // 'ï'
+                            255, // 'ð'
+                            255, // 'ñ'
+                            255, // 'ò'
+                            255, // 'ó'
+                            255, // 'ô'
+                            255, // 'õ'
+                            255, // 'ö'
+                            255, // '÷'
+                            255, // 'ø'
+                            255, // 'ù'
+                            255, // 'ú'
+                            255, // 'û'
+                            255, // 'ü'
+                            255, // 'ý'
+                            255, // 'þ'
+                            255, // 'ÿ'
+                        ];
+
+                    }
+                    /// An architecture independent "packed pair" finder.
+                    #[derive(Clone, Copy, Debug)]
+                    pub struct Finder
+                    {
+                        pair: Pair,
+                        byte1: u8,
+                        byte2: u8,
+                    }
+
+                    impl Finder
+                    {
+                        /// Create a new prefilter that reports possible locations where the given needle matches.
+                        #[inline] pub fn new(needle: &[u8]) -> Option<Finder> 
+                        { Finder::with_pair(needle, Pair::new(needle)?) }
+                        /// Create a new prefilter using the pair given.
+                        #[inline] pub fn with_pair(needle: &[u8], pair: Pair) -> Option<Finder>
+                        {
+                            let byte1 = needle[usize::from(pair.index1())];
+                            let byte2 = needle[usize::from(pair.index2())];
+                            
+                            Some(Finder { pair, byte1, byte2 })
+                        }
+                        /// Run this finder on the given haystack as a prefilter.
+                        #[inline] pub fn find_prefilter(&self, haystack: &[u8]) -> Option<usize>
+                        {
+                            let mut i = 0;
+                            let index1 = usize::from(self.pair.index1());
+                            let index2 = usize::from(self.pair.index2());
+                            loop
+                            {
+                                i += memchr(self.byte1, &haystack[i..])?;
+                                let found = i;
+                                i += 1;
+                                
+                                let aligned1 = match found.checked_sub(index1)
+                                {
+                                    None => continue,
+                                    Some(aligned1) => aligned1,
+                                };
+                                
+                                let aligned2 = match aligned1.checked_add(index2)
+                                {
+                                    None => continue,
+                                    Some(aligned_index2) => aligned_index2,
+                                };
+                                
+                                if haystack.get(aligned2).map_or(true, |&b| b != self.byte2) { continue; }
+                                
+                                return Some(aligned1);
+                            }
+                        }
+                        /// Returns the pair of offsets (into the needle) used to check as a predicate 
+                        /// before confirming whether a needle exists at a particular position.
+                        #[inline] pub fn pair(&self) -> &Pair { &self.pair }
+                    }
+                    /// A pair of byte offsets into a needle to use as a predicate.
+                    #[derive(Clone, Copy, Debug)]
+                    pub struct Pair
+                    {
+                        index1: u8,
+                        index2: u8,
+                    }
+
+                    impl Pair
+                    {
+                        /// Create a new pair of offsets from the given needle.
+                        #[inline] pub fn new(needle: &[u8]) -> Option<Pair>
+                        { Pair::with_ranker(needle, DefaultFrequencyRank) }
+                        /// Create a new pair of offsets from the given needle and ranker.
+                        #[inline] pub fn with_ranker<R: HeuristicFrequencyRank>
+                        (
+                            needle: &[u8],
+                            ranker: R,
+                        ) -> Option<Pair> 
+                        {
+                            if needle.len() <= 1 { return None; }
+                            
+                            let (mut rare1, mut index1) = (needle[0], 0);
+                            let (mut rare2, mut index2) = (needle[1], 1);
+                            
+                            if ranker.rank(rare2) < ranker.rank(rare1)
+                            {
+                                ::mem::swap(&mut rare1, &mut rare2);
+                                ::mem::swap(&mut index1, &mut index2);
+                            }
+                            
+                            let max = usize::from(::u8::MAX);
+                            
+                            for (i, &b) in needle.iter().enumerate().take(max).skip(2)
+                            {
+                                if ranker.rank(b) < ranker.rank(rare1)
+                                {
+                                    rare2 = rare1;
+                                    index2 = index1;
+                                    rare1 = b;
+                                    index1 = u8::try_from(i).unwrap();
+                                }
+                                else if b != rare1 && ranker.rank(b) < ranker.rank(rare2)
+                                {
+                                    rare2 = b;
+                                    index2 = u8::try_from(i).unwrap();
+                                }
+                            }
+                            
+                            assert_ne!(index1, index2);
+                            Some(Pair { index1, index2 })
+                        }
+                        /// Create a new pair using the offsets given for the needle given.
+                        #[inline] pub fn with_indices
+                        (
+                            needle: &[u8],
+                            index1: u8,
+                            index2: u8,
+                        ) -> Option<Pair>
+                        {
+                            if index1 == index2 { return None; }
+                            
+                            if usize::from(index1) >= needle.len() { return None; }
+                            
+                            if usize::from(index2) >= needle.len() { return None; }
+                            
+                            Some(Pair { index1, index2 })
+                        }
+                        /// Returns the first offset of the pair.
+                        #[inline] pub fn index1(&self) -> u8 { self.index1 }
+                        /// Returns the second offset of the pair.
+                        #[inline] pub fn index2(&self) -> u8 { self.index2 }
+                    }
+                    /// This trait allows the user to customize the heuristic used to determine the relative frequency 
+                    /// of a given byte in the dataset being searched.
+                    pub trait HeuristicFrequencyRank
+                    {
+                        /// Return the heuristic frequency rank of the given byte.
+                        fn rank(&self, byte: u8) -> u8;
+                    }
+                    /// The default byte frequency heuristic that is good for most haystacks.
+                    pub struct DefaultFrequencyRank;
+
+                    impl HeuristicFrequencyRank for DefaultFrequencyRank
+                    {
+                        fn rank(&self, byte: u8) -> u8
+                        {
+                            self::default_rank::RANK[usize::from(byte)]
+                        }
+                    }
+                    /// Permits passing any implementation of `HeuristicFrequencyRank` as a borrowed version of itself.
+                    impl<'a, R> HeuristicFrequencyRank for &'a R where
+                    R: HeuristicFrequencyRank
+                    {
+                        fn rank(&self, byte: u8) -> u8 { (**self).rank(byte) }
+                    }
                 }
 
                 pub mod rabinkarp
                 {
+                    /*!
+                    An implementation of the [Rabin-Karp substring search algorithm][rabinkarp]. */
                     use ::
                     {
                         *,
                     };
                     /*
                     */
+                    use ::mem::chr::ext::Pointer;
+                    /// A forward substring searcher using the Rabin-Karp algorithm.
+                    #[derive(Clone, Debug)]
+                    pub struct Finder
+                    {
+                        /// The actual hash.
+                        hash: Hash,
+                        /// The factor needed to multiply a byte by in order to subtract it from the hash.
+                        hash_2pow: u32,
+                    }
+
+                    impl Finder
+                    {
+                        /// Create a new Rabin-Karp forward searcher for the given `needle`.
+                        #[inline] pub fn new(needle: &[u8]) -> Finder
+                        {
+                            let mut s = Finder { hash: Hash::new(), hash_2pow: 1 };
+                            let first_byte = match needle.get(0) {
+                                None => return s,
+                                Some(&first_byte) => first_byte,
+                            };
+                            s.hash.add(first_byte);
+                            for b in needle.iter().copied().skip(1) {
+                                s.hash.add(b);
+                                s.hash_2pow = s.hash_2pow.wrapping_shl(1);
+                            }
+                            s
+                        }
+                        /// Return the first occurrence of the `needle` in the `haystack` given.
+                        #[inline] pub fn find(&self, haystack: &[u8], needle: &[u8]) -> Option<usize>
+                        {
+                            unsafe
+                            {
+                                let hstart = haystack.as_ptr();
+                                let hend = hstart.add(haystack.len());
+                                let nstart = needle.as_ptr();
+                                let nend = nstart.add(needle.len());
+                                let found = self.find_raw(hstart, hend, nstart, nend)?;
+                                Some(found.distance(hstart))
+                            }
+                        }
+                        /// Like `find`, but accepts and returns raw pointers.
+                        #[inline] pub unsafe fn find_raw
+                        (
+                            &self,
+                            hstart: *const u8,
+                            hend: *const u8,
+                            nstart: *const u8,
+                            nend: *const u8,
+                        ) -> Option<*const u8> 
+                        {
+                            let hlen = hend.distance(hstart);
+                            let nlen = nend.distance(nstart);
+                            if nlen > hlen { return None; }
+                            
+                            let mut cur = hstart;
+                            let end = hend.sub(nlen);
+                            let mut hash = Hash::forward(cur, cur.add(nlen));
+                            loop
+                            {
+                                if self.hash == hash && is_equal_raw(cur, nstart, nlen) { return Some(cur); }
+                                
+                                if cur >= end { return None; }
+                                
+                                hash.roll(self, cur.read(), cur.add(nlen).read());
+                                cur = cur.add(1);
+                            }
+                        }
+                    }
+                    /// A reverse substring searcher using the Rabin-Karp algorithm.
+                    #[derive(Clone, Debug)]
+                    pub struct FinderRev(Finder);
+
+                    impl FinderRev
+                    {
+                        /// Create a new Rabin-Karp reverse searcher for the given `needle`.
+                        #[inline] pub fn new(needle: &[u8]) -> FinderRev
+                        {
+                            let mut s = FinderRev(Finder { hash: Hash::new(), hash_2pow: 1 });
+                            let last_byte = match needle.last() {
+                                None => return s,
+                                Some(&last_byte) => last_byte,
+                            };
+                            s.0.hash.add(last_byte);
+                            for b in needle.iter().rev().copied().skip(1) {
+                                s.0.hash.add(b);
+                                s.0.hash_2pow = s.0.hash_2pow.wrapping_shl(1);
+                            }
+                            s
+                        }
+                        /// Return the last occurrence of the `needle` in the `haystack` given.
+                        #[inline] pub fn rfind(&self, haystack: &[u8], needle: &[u8]) -> Option<usize>
+                        {
+                            unsafe
+                            {
+                                let hstart = haystack.as_ptr();
+                                let hend = hstart.add(haystack.len());
+                                let nstart = needle.as_ptr();
+                                let nend = nstart.add(needle.len());
+                                let found = self.rfind_raw(hstart, hend, nstart, nend)?;
+                                Some(found.distance(hstart))
+                            }
+                        }
+                        /// Like `rfind`, but accepts and returns raw pointers.
+                        #[inline] pub unsafe fn rfind_raw
+                        (
+                            &self,
+                            hstart: *const u8,
+                            hend: *const u8,
+                            nstart: *const u8,
+                            nend: *const u8,
+                        ) -> Option<*const u8>
+                        {
+                            let hlen = hend.distance(hstart);
+                            let nlen = nend.distance(nstart);
+                            if nlen > hlen { return None; }
+                            let mut cur = hend.sub(nlen);
+                            let start = hstart;
+                            let mut hash = Hash::reverse(cur, cur.add(nlen));
+                            loop
+                            {
+                                if self.0.hash == hash && is_equal_raw(cur, nstart, nlen) { return Some(cur); }
+                                
+                                if cur <= start { return None; }
+                                
+                                cur = cur.sub(1);
+                                hash.roll(&self.0, cur.add(nlen).read(), cur.read());
+                            }
+                        }
+                    }
+                    /// Whether RK is believed to be very fast for the given needle/haystack.
+                    #[inline] pub fn is_fast(haystack: &[u8], _needle: &[u8]) -> bool { haystack.len() < 16 }
+                    /// A Rabin-Karp hash.
+                    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+                    struct Hash(u32);
+
+                    impl Hash
+                    {
+                        /// Create a new hash that represents the empty string.
+                        #[inline( always )] fn new() -> Hash { Hash(0) }
+                        /// Create a new hash from the bytes given for use in forward searches.
+                        #[inline( always )] unsafe fn forward(mut start: *const u8, end: *const u8) -> Hash
+                        {
+                            let mut hash = Hash::new();
+                            while start < end
+                            {
+                                hash.add(start.read());
+                                start = start.add(1);
+                            }
+                            
+                            hash
+                        }
+                        /// Create a new hash from the bytes given for use in reverse searches.
+                        #[inline( always )] unsafe fn reverse(start: *const u8, mut end: *const u8) -> Hash
+                        {
+                            let mut hash = Hash::new();
+                            
+                            while start < end
+                            {
+                                end = end.sub(1);
+                                hash.add(end.read());
+                            }
+                            
+                            hash
+                        }
+                        /// Add 'new' and remove 'old' from this hash.
+                        #[inline( always )] fn roll(&mut self, finder: &Finder, old: u8, new: u8)
+                        {
+                            self.del(finder, old);
+                            self.add(new);
+                        }
+                        /// Add a byte to this hash.
+                        #[inline( always )] fn add(&mut self, byte: u8)
+                        { self.0 = self.0.wrapping_shl(1).wrapping_add(u32::from(byte)); }
+                        /// Remove a byte from this hash.
+                        #[inline( always )] fn del(&mut self, finder: &Finder, byte: u8)
+                        {
+                            let factor = finder.hash_2pow;
+                            self.0 = self.0.wrapping_sub(u32::from(byte).wrapping_mul(factor));
+                        }
+                    }
+                    /// Returns true when `x[i] == y[i]` for all `0 <= i < n`.
+                    #[cold] #[inline( never )] unsafe fn is_equal_raw(x: *const u8, y: *const u8, n: usize) -> bool
+                    { ::mem::chr::arch::all::is_equal_raw(x, y, n) }
                 }
 
                 pub mod shiftor
                 {
+                    /*!
+                    An implementation of the [Shift-Or substring search algorithm][shiftor]. */
                     use ::
                     {
+                        boxed::{ Box },
                         *,
                     };
                     /*
                     */
+                    /// The type of our mask.
+                    type Mask = u16;
+                    /// A forward substring searcher using the Shift-Or algorithm.
+                    #[derive(Debug)]
+                    pub struct Finder
+                    {
+                        masks: Box<[Mask; 256]>,
+                        needle_len: usize,
+                    }
+
+                    impl Finder
+                    {
+                        const MAX_NEEDLE_LEN: usize = (Mask::BITS - 1) as usize;
+                        /// Create a new Shift-Or forward searcher for the given `needle`.
+                        #[inline] pub fn new(needle: &[u8]) -> Option<Finder>
+                        {
+                            let needle_len = needle.len();
+                            
+                            if needle_len > Finder::MAX_NEEDLE_LEN { return None; }
+                            
+                            let mut searcher = Finder { masks: Box::from([!0; 256]), needle_len };
+                            
+                            for (i, &byte) in needle.iter().enumerate()
+                            {
+                                searcher.masks[usize::from(byte)] &= !(1 << i);
+                            }
+                            
+                            Some(searcher)
+                        }
+                        /// Return the first occurrence of the needle given to `Finder::new` in the `haystack` given.
+                        #[inline] pub fn find(&self, haystack: &[u8]) -> Option<usize>
+                        {
+                            if self.needle_len == 0 { return Some(0); }
+                            
+                            let mut result = !1;
+                            
+                            for (i, &byte) in haystack.iter().enumerate()
+                            {
+                                result |= self.masks[usize::from(byte)];
+                                result <<= 1;
+                                if result & (1 << self.needle_len) == 0 {
+                                    return Some(i + 1 - self.needle_len);
+                                }
+                            }
+                            
+                            None
+                        }
+                    }
+
                 }
 
                 pub mod twoway
                 {
                     use ::
                     {
+                        mem::chr::
+                        {
+                            arch::all::{ is_prefix, is_suffix },
+                            memmem::Pre,
+                        },
                         *,
                     };
                     /*
                     */
-                }
-                /// Returns true if and only if `needle` is a prefix of `haystack`.
-                #[inline( always )] pub fn is_prefix(haystack: &[u8], needle: &[u8]) -> bool 
-                { needle.len() <= haystack.len() && is_equal(&haystack[..needle.len()], needle) }
-                /// Returns true if and only if `needle` is a suffix of `haystack`.
-                #[inline( always )] pub fn is_suffix(haystack: &[u8], needle: &[u8]) -> bool 
-                {
-                    needle.len() <= haystack.len() && is_equal(&haystack[haystack.len() - needle.len()..], needle)
-                }
-                /// Compare corresponding bytes in `x` and `y` for equality.
-                #[inline( always )] pub fn is_equal(x: &[u8], y: &[u8]) -> bool 
-                {
-                    if x.len() != y.len() { return false; }
-                    
-                    unsafe { is_equal_raw(x.as_ptr(), y.as_ptr(), x.len()) }
-                }
-                /// Compare `n` bytes at the given pointers for equality.
-                #[inline(always)] pub unsafe fn is_equal_raw
-                (
-                    mut x: *const u8,
-                    mut y: *const u8,
-                    n: usize,
-                ) -> bool 
-                {
-                    if n < 4 {
-                        return match n {
-                            0 => true,
-                            1 => x.read() == y.read(),
-                            2 => {
-                                x.cast::<u16>().read_unaligned()
-                                    == y.cast::<u16>().read_unaligned()
+                    /// A forward substring searcher that uses the Two-Way algorithm.
+                    #[derive(Clone, Copy, Debug)]
+                    pub struct Finder(TwoWay);
+                    /// A reverse substring searcher that uses the Two-Way algorithm.
+                    #[derive(Clone, Copy, Debug)]
+                    pub struct FinderRev(TwoWay);
+                    /// An implementation of the TwoWay substring search algorithm.
+                    #[derive(Clone, Copy, Debug)]
+                    struct TwoWay
+                    {
+                        /// A small bitset used as a quick prefilter.
+                        byteset: ApproximateByteSet,
+                        /// A critical position in needle.
+                        critical_pos: usize,
+                        /// The amount we shift by in the Two-Way search algorithm.
+                        shift: Shift,
+                    }
+
+                    impl Finder
+                    {
+                        /// Create a searcher that finds occurrences of the given `needle`.
+                        #[inline] pub fn new(needle: &[u8]) -> Finder
+                        {
+                            let byteset = ApproximateByteSet::new(needle);
+                            let min_suffix = Suffix::forward(needle, SuffixKind::Minimal);
+                            let max_suffix = Suffix::forward(needle, SuffixKind::Maximal);
+                            
+                            let (period_lower_bound, critical_pos) =
+                            if min_suffix.pos > max_suffix.pos { (min_suffix.period, min_suffix.pos) }
+                            else { (max_suffix.period, max_suffix.pos) };
+                            
+                            let shift = Shift::forward(needle, period_lower_bound, critical_pos);
+                            Finder(TwoWay { byteset, critical_pos, shift })
+                        }
+                        /// Returns the first occurrence of `needle` in the given `haystack`,
+                        /// or `None` if no such occurrence could be found.
+                        #[inline] pub fn find(&self, haystack: &[u8], needle: &[u8]) -> Option<usize>
+                        { self.find_with_prefilter(None, haystack, needle) }
+                        /// This is like [`Finder::find`], but it accepts a prefilter for accelerating searches.
+                        #[inline( always )] pub fn find_with_prefilter
+                        (
+                            &self,
+                            pre: Option<Pre<'_>>,
+                            haystack: &[u8],
+                            needle: &[u8],
+                        ) -> Option<usize>
+                        {
+                            match self.0.shift
+                            {
+                                Shift::Small { period } => { self.find_small_imp(pre, haystack, needle, period) }			
+                                Shift::Large { shift } => { self.find_large_imp(pre, haystack, needle, shift) }
+                            }
+                        }
+                        
+                        #[inline( always) ] fn find_small_imp
+                        (
+                            &self,
+                            mut pre: Option<Pre<'_>>,
+                            haystack: &[u8],
+                            needle: &[u8],
+                            period: usize,
+                        ) -> Option<usize>
+                        {
+                            let mut pos = 0;
+                            let mut shift = 0;
+                            let last_byte_pos = match needle.len().checked_sub(1)
+                            {
+                                None => return Some(pos),
+                                Some(last_byte) => last_byte,
+                            };
+                            
+                            while pos + needle.len() <= haystack.len()
+                            {
+                                let mut i = cmp::max(self.0.critical_pos, shift);
+                                
+                                if let Some(pre) = pre.as_mut()
+                                {
+                                    if pre.is_effective()
+                                    {
+                                        pos += pre.find(&haystack[pos..])?;
+                                        shift = 0;
+                                        i = self.0.critical_pos;
+                                        
+                                        if pos + needle.len() > haystack.len() { return None; }
+                                    }
+                                }
+                                
+                                if !self.0.byteset.contains(haystack[pos + last_byte_pos])
+                                {
+                                    pos += needle.len();
+                                    shift = 0;
+                                    continue;
+                                }
+                                
+                                while i < needle.len() && needle[i] == haystack[pos + i]
+                                {
+                                    i += 1;
+                                }
+                                
+                                if i < needle.len()
+                                {
+                                    pos += i - self.0.critical_pos + 1;
+                                    shift = 0;
+                                }
+                                
+                                else
+                                {
+                                    let mut j = self.0.critical_pos;
+                                    
+                                    while j > shift && needle[j] == haystack[pos + j]
+                                    {
+                                        j -= 1;
+                                    }
+                                    
+                                    if j <= shift && needle[shift] == haystack[pos + shift] { return Some(pos); }
+                                    
+                                    pos += period;
+                                    shift = needle.len() - period;
+                                }
                             }
                             
-                            3 => x.cast::<[u8; 3]>().read() == y.cast::<[u8; 3]>().read(),
-                            _ => unreachable!(),
-                        };
-                    }
-                    
-                    let xend = x.add(n.wrapping_sub(4));
-                    let yend = y.add(n.wrapping_sub(4));
-                    while x < xend 
-                    {
-                        let vx = x.cast::<u32>().read_unaligned();
-                        let vy = y.cast::<u32>().read_unaligned();
-                        if vx != vy {
-                            return false;
+                            None
                         }
-                        x = x.add(4);
-                        y = y.add(4);
+
+                        #[inline( always) ] fn find_large_imp
+                        (
+                            &self,
+                            mut pre: Option<Pre<'_>>,
+                            haystack: &[u8],
+                            needle: &[u8],
+                            shift: usize,
+                        ) -> Option<usize>
+                        {
+                            let mut pos = 0;
+                            
+                            let last_byte_pos = match needle.len().checked_sub(1)
+                            {
+                                None => return Some(pos),
+                                Some(last_byte) => last_byte,
+                            };
+                            
+                            'outer: while pos + needle.len() <= haystack.len()
+                            {
+                                if let Some(pre) = pre.as_mut()
+                                {
+                                    if pre.is_effective()
+                                    {
+                                        pos += pre.find(&haystack[pos..])?;
+                                        
+                                        if pos + needle.len() > haystack.len() { return None; }
+                                    }
+                                }
+
+                                if !self.0.byteset.contains(haystack[pos + last_byte_pos])
+                                {
+                                    pos += needle.len();
+                                    continue;
+                                }
+                                
+                                let mut i = self.0.critical_pos;
+                                
+                                while i < needle.len() && needle[i] == haystack[pos + i]
+                                {
+                                    i += 1;
+                                }
+                                
+                                if i < needle.len() { pos += i - self.0.critical_pos + 1; }
+                                else
+                                {
+                                    for j in (0..self.0.critical_pos).rev()
+                                    {
+                                        if needle[j] != haystack[pos + j]
+                                        {
+                                            pos += shift;
+                                            continue 'outer;
+                                        }
+                                    }
+                                    
+                                    return Some(pos);
+                                }
+                            }
+                            
+                            None
+                        }
                     }
-                    let vx = xend.cast::<u32>().read_unaligned();
-                    let vy = yend.cast::<u32>().read_unaligned();
-                    vx == vy
+
+                    impl FinderRev
+                    {
+                        /// Create a searcher that finds occurrences of the given `needle`.
+                        #[inline] pub fn new(needle: &[u8]) -> FinderRev
+                        {
+                            let byteset = ApproximateByteSet::new(needle);
+                            let min_suffix = Suffix::reverse(needle, SuffixKind::Minimal);
+                            let max_suffix = Suffix::reverse(needle, SuffixKind::Maximal);
+
+                            let (period_lower_bound, critical_pos) =
+                            if min_suffix.pos < max_suffix.pos { (min_suffix.period, min_suffix.pos) }
+                            else { (max_suffix.period, max_suffix.pos) };
+                                
+                            let shift = Shift::reverse(needle, period_lower_bound, critical_pos);
+                            FinderRev(TwoWay { byteset, critical_pos, shift })
+                        }
+                        /// Returns the last occurrence of `needle` in the given `haystack`, 
+                        /// or `None` if no such occurrence could be found.
+                        #[inline] pub fn rfind(&self, haystack: &[u8], needle: &[u8]) -> Option<usize>
+                        {
+                            match self.0.shift
+                            {
+                                Shift::Small { period } => { self.rfind_small_imp(haystack, needle, period) }
+                                Shift::Large { shift } => { self.rfind_large_imp(haystack, needle, shift) }
+                            }
+                        }
+
+                        #[inline( always) ] fn rfind_small_imp
+                        (
+                            &self,
+                            haystack: &[u8],
+                            needle: &[u8],
+                            period: usize,
+                        ) -> Option<usize>
+                        {
+                            let nlen = needle.len();
+                            let mut pos = haystack.len();
+                            let mut shift = nlen;
+                            let first_byte = match needle.get(0)
+                            {
+                                None => return Some(pos),
+                                Some(&first_byte) => first_byte,
+                            };
+                            
+                            while pos >= nlen
+                            {
+                                if !self.0.byteset.contains(haystack[pos - nlen])
+                                {
+                                    pos -= nlen;
+                                    shift = nlen;
+                                    continue;
+                                }
+                                
+                                let mut i = cmp::min(self.0.critical_pos, shift);
+                                
+                                while i > 0 && needle[i - 1] == haystack[pos - nlen + i - 1]
+                                {
+                                    i -= 1;
+                                }
+                                
+                                if i > 0 || first_byte != haystack[pos - nlen]
+                                {
+                                    pos -= self.0.critical_pos - i + 1;
+                                    shift = nlen;
+                                }
+                                
+                                else
+                                {
+                                    let mut j = self.0.critical_pos;
+                                    
+                                    while j < shift && needle[j] == haystack[pos - nlen + j]
+                                    {
+                                        j += 1;
+                                    }
+                                    
+                                    if j >= shift { return Some(pos - nlen); }
+                                    
+                                    pos -= period;
+                                    shift = period;
+                                }
+                            }
+                            
+                            None
+                        }
+
+                        #[inline( always) ] fn rfind_large_imp
+                        (
+                            &self,
+                            haystack: &[u8],
+                            needle: &[u8],
+                            shift: usize,
+                        ) -> Option<usize>
+                        {
+                            let nlen = needle.len();
+                            let mut pos = haystack.len();
+                            let first_byte = match needle.get(0)
+                            {
+                                None => return Some(pos),
+                                Some(&first_byte) => first_byte,
+                            };
+                            
+                            while pos >= nlen
+                            {
+                                if !self.0.byteset.contains(haystack[pos - nlen])
+                                {
+                                    pos -= nlen;
+                                    continue;
+                                }
+                                
+                                let mut i = self.0.critical_pos;
+                                
+                                while i > 0 && needle[i - 1] == haystack[pos - nlen + i - 1]
+                                {
+                                    i -= 1;
+                                }
+                                
+                                if i > 0 || first_byte != haystack[pos - nlen] { pos -= self.0.critical_pos - i + 1; }
+                                
+                                else
+                                {
+                                    let mut j = self.0.critical_pos;
+                                    
+                                    while j < nlen && needle[j] == haystack[pos - nlen + j] { j += 1; }
+                                    
+                                    if j == nlen { return Some(pos - nlen); }
+                                    
+                                    pos -= shift;
+                                }
+                            }
+                            
+                            None
+                        }
+                    }
+                    /// A representation of the amount we're allowed to shift by during Two-Way search.
+                    #[derive(Clone, Copy, Debug)]
+                    enum Shift
+                    {
+                        Small { period: usize },
+                        Large { shift: usize },
+                    }
+
+                    impl Shift
+                    {
+                        /// Compute the shift for a given needle in the forward direction.
+                        fn forward
+                        (
+                            needle: &[u8],
+                            period_lower_bound: usize,
+                            critical_pos: usize,
+                        ) -> Shift
+                        {
+                            let large = cmp::max(critical_pos, needle.len() - critical_pos);
+                            
+                            if critical_pos * 2 >= needle.len() { return Shift::Large { shift: large }; }
+
+                            let (u, v) = needle.split_at(critical_pos);
+                            
+                            if !is_suffix(&v[..period_lower_bound], u) { return Shift::Large { shift: large }; }
+                            
+                            Shift::Small { period: period_lower_bound }
+                        }
+                        /// Compute the shift for a given needle in the reverse direction.
+                        fn reverse
+                        (
+                            needle: &[u8],
+                            period_lower_bound: usize,
+                            critical_pos: usize,
+                        ) -> Shift
+                        {
+                            let large = cmp::max(critical_pos, needle.len() - critical_pos);
+                            
+                            if (needle.len() - critical_pos) * 2 >= needle.len() { return Shift::Large { shift: large }; }
+
+                            let (v, u) = needle.split_at(critical_pos);
+                            
+                            if !is_prefix(&v[v.len() - period_lower_bound..], u) { return Shift::Large { shift: large }; }
+                            
+                            Shift::Small { period: period_lower_bound }
+                        }
+                    }
+                    /// A suffix extracted from a needle along with its period.
+                    #[derive(Debug)]
+                    struct Suffix
+                    {
+                        /// The starting position of this suffix.
+                        pos: usize,
+                        /// The period of this suffix.
+                        period: usize,
+                    }
+
+                    impl Suffix
+                    {
+                        fn forward(needle: &[u8], kind: SuffixKind) -> Suffix
+                        {
+                            let mut suffix = Suffix { pos: 0, period: 1 };
+                            let mut candidate_start = 1;
+                            let mut offset = 0;
+
+                            while candidate_start + offset < needle.len()
+                            {
+                                let current = needle[suffix.pos + offset];
+                                let candidate = needle[candidate_start + offset];
+                                match kind.cmp(current, candidate)
+                                {
+                                    SuffixOrdering::Accept =>
+                                    {
+                                        suffix = Suffix { pos: candidate_start, period: 1 };
+                                        candidate_start += 1;
+                                        offset = 0;
+                                    }
+                                    
+                                    SuffixOrdering::Skip =>
+                                    {
+                                        candidate_start += offset + 1;
+                                        offset = 0;
+                                        suffix.period = candidate_start - suffix.pos;
+                                    }
+                                    
+                                    SuffixOrdering::Push =>
+                                    {
+                                        if offset + 1 == suffix.period
+                                        {
+                                            candidate_start += suffix.period;
+                                            offset = 0;
+                                        }
+                                        else { offset += 1; }
+                                    }
+                                }
+                            }
+                            
+                            suffix
+                        }
+
+                        fn reverse(needle: &[u8], kind: SuffixKind) -> Suffix
+                        {
+                            let mut suffix = Suffix { pos: needle.len(), period: 1 };
+                            
+                            if needle.len() == 1 { return suffix; }
+                            
+                            let mut candidate_start = match needle.len().checked_sub(1)
+                            {
+                                None => return suffix,
+                                Some(candidate_start) => candidate_start,
+                            };
+                            
+                            let mut offset = 0;
+
+                            while offset < candidate_start
+                            {
+                                let current = needle[suffix.pos - offset - 1];
+                                let candidate = needle[candidate_start - offset - 1];
+                                
+                                match kind.cmp(current, candidate) 
+                                {
+                                    SuffixOrdering::Accept => 
+                                    {
+                                        suffix = Suffix { pos: candidate_start, period: 1 };
+                                        candidate_start -= 1;
+                                        offset = 0;
+                                    }
+                                    
+                                    SuffixOrdering::Skip => 
+                                    {
+                                        candidate_start -= offset + 1;
+                                        offset = 0;
+                                        suffix.period = suffix.pos - candidate_start;
+                                    }
+                                    
+                                    SuffixOrdering::Push => 
+                                    {
+                                        
+                                        if offset + 1 == suffix.period 
+                                        {
+                                            candidate_start -= suffix.period;
+                                            offset = 0;
+                                        }
+                                        
+                                        else { offset += 1; }
+                                    }
+                                }
+                            }
+                            
+                            suffix
+                        }
+                    }
+                    /// The kind of suffix to extract.
+                    #[derive(Clone, Copy, Debug)]
+                    enum SuffixKind
+                    {
+                        /// Extract the smallest lexicographic suffix from a string.
+                        Minimal,
+                        /// Extract the largest lexicographic suffix from a string.
+                        Maximal,
+                    }
+                    /// The result of comparing corresponding bytes between two suffixes.
+                    #[derive(Clone, Copy, Debug)]
+                    enum SuffixOrdering
+                    {
+                        /// This occurs when the given candidate byte indicates that the candidate suffix is better 
+                        ///than the current maximal (or minimal) suffix.
+                        Accept,
+                        /// This occurs when the given candidate byte excludes the candidate suffix from being better 
+                        ///than the current maximal (or minimal) suffix.
+                        Skip,
+                        /// This occurs when no decision to accept or skip the candidate suffix can be made.
+                        Push,
+                    }
+
+                    impl SuffixKind
+                    {
+                        /// Returns true if and only if the given candidate byte indicates that it should replace 
+                        /// the current suffix as the maximal (or minimal) suffix.
+                        fn cmp(self, current: u8, candidate: u8) -> SuffixOrdering
+                        {
+                            use self::SuffixOrdering::*;
+
+                            match self
+                            {
+                                SuffixKind::Minimal if candidate < current => Accept,
+                                SuffixKind::Minimal if candidate > current => Skip,
+                                SuffixKind::Minimal => Push,
+                                SuffixKind::Maximal if candidate > current => Accept,
+                                SuffixKind::Maximal if candidate < current => Skip,
+                                SuffixKind::Maximal => Push,
+                            }
+                        }
+                    }
+                    /// A bitset used to track whether a particular byte exists in a needle or not.
+                    #[derive(Clone, Copy, Debug)]
+                    struct ApproximateByteSet(u64);
+
+                    impl ApproximateByteSet
+                    {
+                        /// Create a new set from the given needle.
+                        fn new(needle: &[u8]) -> ApproximateByteSet
+                        {
+                            let mut bits = 0;
+                            for &b in needle {
+                                bits |= 1 << (b % 64);
+                            }
+                            ApproximateByteSet(bits)
+                        }
+                        /// Return true if and only if the given byte might be in this set.
+                        #[inline( always) ] fn contains(&self, byte: u8) -> bool { self.0 & (1 << (byte % 64)) != 0 }
+                    }
+                    /// Returns true if and only if `needle` is a prefix of `haystack`.
+                    #[inline( always )] pub fn is_prefix(haystack: &[u8], needle: &[u8]) -> bool 
+                    { needle.len() <= haystack.len() && is_equal(&haystack[..needle.len()], needle) }
+                    /// Returns true if and only if `needle` is a suffix of `haystack`.
+                    #[inline( always )] pub fn is_suffix(haystack: &[u8], needle: &[u8]) -> bool 
+                    {
+                        needle.len() <= haystack.len() && is_equal(&haystack[haystack.len() - needle.len()..], needle)
+                    }
+                    /// Compare corresponding bytes in `x` and `y` for equality.
+                    #[inline( always )] pub fn is_equal(x: &[u8], y: &[u8]) -> bool 
+                    {
+                        if x.len() != y.len() { return false; }
+                        
+                        unsafe { is_equal_raw(x.as_ptr(), y.as_ptr(), x.len()) }
+                    }
+                    /// Compare `n` bytes at the given pointers for equality.
+                    #[inline(always)] pub unsafe fn is_equal_raw
+                    (
+                        mut x: *const u8,
+                        mut y: *const u8,
+                        n: usize,
+                    ) -> bool 
+                    {
+                        if n < 4 {
+                            return match n {
+                                0 => true,
+                                1 => x.read() == y.read(),
+                                2 => {
+                                    x.cast::<u16>().read_unaligned()
+                                        == y.cast::<u16>().read_unaligned()
+                                }
+                                
+                                3 => x.cast::<[u8; 3]>().read() == y.cast::<[u8; 3]>().read(),
+                                _ => unreachable!(),
+                            };
+                        }
+                        
+                        let xend = x.add(n.wrapping_sub(4));
+                        let yend = y.add(n.wrapping_sub(4));
+                        while x < xend 
+                        {
+                            let vx = x.cast::<u32>().read_unaligned();
+                            let vy = y.cast::<u32>().read_unaligned();
+                            if vx != vy {
+                                return false;
+                            }
+                            x = x.add(4);
+                            y = y.add(4);
+                        }
+                        let vx = xend.cast::<u32>().read_unaligned();
+                        let vy = yend.cast::<u32>().read_unaligned();
+                        vx == vy
+                    }
                 }
             }
 
             pub mod generic
             {
+                /*!
+                This module defines "generic" routines that can be specialized to specific architectures.*/
                 use ::
                 {
                     *,
                 };
                 /*
                 */
+                pub mod memchr
+                {
+                    /*!
+                    Generic crate-internal routines for the `memchr` family of functions. */
+                    use ::
+                    {
+                        mem::chr::
+                        {
+                            ext::Pointer,
+                            vector::{MoveMask, Vector},
+                        },
+                        *,
+                    };
+                    /*
+                    */
+                    /// Finds all occurrences of a single byte in a haystack.
+                    #[derive(Clone, Copy, Debug)]
+                    pub struct One<V>
+                    {
+                        s1: u8,
+                        v1: V,
+                    }
+
+                    impl<V: Vector> One<V>
+                    {
+                        /// The number of bytes we examine per each iteration of our search loop.
+                        const LOOP_SIZE: usize = 4 * V::BYTES;
+                        /// Create a new searcher that finds occurrences of the byte given.
+                        #[inline( always )] pub unsafe fn new(needle: u8) -> One<V>
+                        { One { s1: needle, v1: V::splat(needle) } }
+                        /// Returns the needle given to `One::new`.
+                        #[inline( always )] pub fn needle1(&self) -> u8 { self.s1 }
+                        /// Return a pointer to the first occurrence of the needle in the given haystack.
+                        #[inline( always )] pub unsafe fn find_raw
+                        (
+                            &self,
+                            start: *const u8,
+                            end: *const u8,
+                        ) -> Option<*const u8>
+                        {
+                            debug_assert!(V::BYTES <= 32, "vector cannot be bigger than 32 bytes");
+
+                            let topos = V::Mask::first_offset;
+                            let len = end.distance(start);
+                            debug_assert!
+                            (
+                                len >= V::BYTES,
+                                "haystack has length {}, but must be at least {}",
+                                len,
+                                V::BYTES
+                            );
+                            
+                            if let Some(cur) = self.search_chunk(start, topos) { return Some(cur); }
+                            
+                            let mut cur = start.add(V::BYTES - (start.as_usize() & V::ALIGN));
+                            debug_assert!(cur > start && end.sub(V::BYTES) >= start);
+                            if len >= Self::LOOP_SIZE
+                            {
+                                while cur <= end.sub(Self::LOOP_SIZE)
+                                {
+                                    debug_assert_eq!(0, cur.as_usize() % V::BYTES);
+
+                                    let a = V::load_aligned(cur);
+                                    let b = V::load_aligned(cur.add(1 * V::BYTES));
+                                    let c = V::load_aligned(cur.add(2 * V::BYTES));
+                                    let d = V::load_aligned(cur.add(3 * V::BYTES));
+                                    let eqa = self.v1.cmpeq(a);
+                                    let eqb = self.v1.cmpeq(b);
+                                    let eqc = self.v1.cmpeq(c);
+                                    let eqd = self.v1.cmpeq(d);
+                                    let or1 = eqa.or(eqb);
+                                    let or2 = eqc.or(eqd);
+                                    let or3 = or1.or(or2);
+                                    
+                                    if or3.movemask_will_have_non_zero() 
+                                    {
+                                        let mask = eqa.movemask();
+                                        if mask.has_non_zero() 
+                                        {
+                                            return Some(cur.add(topos(mask)));
+                                        }
+
+                                        let mask = eqb.movemask();
+                                        if mask.has_non_zero() 
+                                        {
+                                            return Some(cur.add(1 * V::BYTES).add(topos(mask)));
+                                        }
+
+                                        let mask = eqc.movemask();
+                                        if mask.has_non_zero() 
+                                        {
+                                            return Some(cur.add(2 * V::BYTES).add(topos(mask)));
+                                        }
+
+                                        let mask = eqd.movemask();
+                                        debug_assert!(mask.has_non_zero());
+                                        return Some(cur.add(3 * V::BYTES).add(topos(mask)));
+                                    }
+                                    
+                                    cur = cur.add(Self::LOOP_SIZE);
+                                }
+                            }
+                            
+                            while cur <= end.sub(V::BYTES)
+                            {
+                                debug_assert!(end.distance(cur) >= V::BYTES);
+                                if let Some(cur) = self.search_chunk(cur, topos) { return Some(cur); }
+                                
+                                cur = cur.add(V::BYTES);
+                            }
+                            
+                            if cur < end
+                            {
+                                debug_assert!(end.distance(cur) < V::BYTES);
+                                cur = cur.sub(V::BYTES - end.distance(cur));
+                                debug_assert_eq!(end.distance(cur), V::BYTES);
+                                return self.search_chunk(cur, topos);
+                            }
+                            
+                            None
+                        }
+                        /// Return a pointer to the last occurrence of the needle in the given haystack.
+                        #[inline( always )] pub unsafe fn rfind_raw
+                        (
+                            &self,
+                            start: *const u8,
+                            end: *const u8,
+                        ) -> Option<*const u8>
+                        {
+                            debug_assert!(V::BYTES <= 32, "vector cannot be bigger than 32 bytes");
+
+                            let topos = V::Mask::last_offset;
+                            let len = end.distance(start);
+                            
+                            debug_assert!
+                            (
+                                len >= V::BYTES,
+                                "haystack has length {}, but must be at least {}",
+                                len,
+                                V::BYTES
+                            );
+
+                            if let Some(cur) = self.search_chunk(end.sub(V::BYTES), topos) { return Some(cur); }
+                            
+                            let mut cur = end.sub(end.as_usize() & V::ALIGN);
+                            debug_assert!(start <= cur && cur <= end);
+                            
+                            if len >= Self::LOOP_SIZE
+                            {
+                                while cur >= start.add(Self::LOOP_SIZE)
+                                {
+                                    debug_assert_eq!(0, cur.as_usize() % V::BYTES);
+
+                                    cur = cur.sub(Self::LOOP_SIZE);
+                                    let a = V::load_aligned(cur);
+                                    let b = V::load_aligned(cur.add(1 * V::BYTES));
+                                    let c = V::load_aligned(cur.add(2 * V::BYTES));
+                                    let d = V::load_aligned(cur.add(3 * V::BYTES));
+                                    let eqa = self.v1.cmpeq(a);
+                                    let eqb = self.v1.cmpeq(b);
+                                    let eqc = self.v1.cmpeq(c);
+                                    let eqd = self.v1.cmpeq(d);
+                                    let or1 = eqa.or(eqb);
+                                    let or2 = eqc.or(eqd);
+                                    let or3 = or1.or(or2);
+                                    
+                                    if or3.movemask_will_have_non_zero()
+                                    {
+                                        let mask = eqd.movemask();
+                                        
+                                        if mask.has_non_zero() 
+                                        {
+                                            return Some(cur.add(3 * V::BYTES).add(topos(mask)));
+                                        }
+
+                                        let mask = eqc.movemask();
+                                        
+                                        if mask.has_non_zero() 
+                                        {
+                                            return Some(cur.add(2 * V::BYTES).add(topos(mask)));
+                                        }
+
+                                        let mask = eqb.movemask();
+                                        
+                                        if mask.has_non_zero() 
+                                        {
+                                            return Some(cur.add(1 * V::BYTES).add(topos(mask)));
+                                        }
+
+                                        let mask = eqa.movemask();
+                                        debug_assert!(mask.has_non_zero());
+                                        return Some(cur.add(topos(mask)));
+                                    }
+                                }
+                            }
+                            
+                            while cur >= start.add(V::BYTES)
+                            {
+                                debug_assert!(cur.distance(start) >= V::BYTES);
+                                cur = cur.sub(V::BYTES);
+                                
+                                if let Some(cur) = self.search_chunk(cur, topos) { return Some(cur); }
+                            }
+                            
+                            if cur > start
+                            {
+                                debug_assert!(cur.distance(start) < V::BYTES);
+                                return self.search_chunk(start, topos);
+                            }
+                            
+                            None
+                        }
+                        /// Return a count of all matching bytes in the given haystack.
+                        #[inline( always )] pub unsafe fn count_raw
+                        (
+                            &self,
+                            start: *const u8,
+                            end: *const u8,
+                        ) -> usize
+                        {
+                            debug_assert!(V::BYTES <= 32, "vector cannot be bigger than 32 bytes");
+
+                            let confirm = |b| b == self.needle1();
+                            let len = end.distance(start);
+                            debug_assert!
+                            (
+                                len >= V::BYTES,
+                                "haystack has length {}, but must be at least {}",
+                                len,
+                                V::BYTES
+                            );
+                            
+                            let mut cur = start.add(V::BYTES - (start.as_usize() & V::ALIGN));
+                            
+                            let mut count = count_byte_by_byte(start, cur, confirm);
+                            debug_assert!(cur > start && end.sub(V::BYTES) >= start);
+                            if len >= Self::LOOP_SIZE
+                            {
+                                while cur <= end.sub(Self::LOOP_SIZE)
+                                {
+                                    debug_assert_eq!(0, cur.as_usize() % V::BYTES);
+
+                                    let a = V::load_aligned(cur);
+                                    let b = V::load_aligned(cur.add(1 * V::BYTES));
+                                    let c = V::load_aligned(cur.add(2 * V::BYTES));
+                                    let d = V::load_aligned(cur.add(3 * V::BYTES));
+                                    let eqa = self.v1.cmpeq(a);
+                                    let eqb = self.v1.cmpeq(b);
+                                    let eqc = self.v1.cmpeq(c);
+                                    let eqd = self.v1.cmpeq(d);
+                                    count += eqa.movemask().count_ones();
+                                    count += eqb.movemask().count_ones();
+                                    count += eqc.movemask().count_ones();
+                                    count += eqd.movemask().count_ones();
+                                    cur = cur.add(Self::LOOP_SIZE);
+                                }
+                            }
+                            
+                            while cur <= end.sub(V::BYTES)
+                            {
+                                debug_assert!(end.distance(cur) >= V::BYTES);
+                                let chunk = V::load_unaligned(cur);
+                                count += self.v1.cmpeq(chunk).movemask().count_ones();
+                                cur = cur.add(V::BYTES);
+                            }
+                            
+                            count += count_byte_by_byte(cur, end, confirm);
+                            count
+                        }
+                        /// Search `V::BYTES` starting at `cur` via an unaligned load.
+                        #[inline( always )] unsafe fn search_chunk
+                        (
+                            &self,
+                            cur: *const u8,
+                            mask_to_offset: impl Fn(V::Mask) -> usize,
+                        ) -> Option<*const u8>
+                        {
+                            let chunk = V::load_unaligned(cur);
+                            let mask = self.v1.cmpeq(chunk).movemask();
+                            
+                            if mask.has_non_zero() { Some(cur.add(mask_to_offset(mask))) }
+                            else { None }
+                        }
+                    }
+                    /// Finds all occurrences of two bytes in a haystack.
+                    #[derive(Clone, Copy, Debug)]
+                    pub struct Two<V>
+                    {
+                        s1: u8,
+                        s2: u8,
+                        v1: V,
+                        v2: V,
+                    }
+
+                    impl<V: Vector> Two<V>
+                    {
+                        /// The number of bytes we examine per each iteration of our search loop.
+                        const LOOP_SIZE: usize = 2 * V::BYTES;
+                        /// Create a new searcher that finds occurrences of the byte given.
+                        #[inline( always )] pub unsafe fn new(needle1: u8, needle2: u8) -> Two<V>
+                        {
+                            Two
+                            {
+                                s1: needle1,
+                                s2: needle2,
+                                v1: V::splat(needle1),
+                                v2: V::splat(needle2),
+                            }
+                        }
+                        /// Returns the first needle given to `Two::new`.
+                        #[inline( always )] pub fn needle1(&self) -> u8 { self.s1 }
+                        /// Returns the second needle given to `Two::new`.
+                        #[inline( always )] pub fn needle2(&self) -> u8 { self.s2 }
+                        /// Return a pointer to the first occurrence of one of the needles in the given haystack.
+                        #[inline( always )] pub unsafe fn find_raw
+                        (
+                            &self,
+                            start: *const u8,
+                            end: *const u8,
+                        ) -> Option<*const u8>
+                        {
+                            debug_assert!(V::BYTES <= 32, "vector cannot be bigger than 32 bytes");
+
+                            let topos = V::Mask::first_offset;
+                            let len = end.distance(start);
+                            debug_assert!(
+                                len >= V::BYTES,
+                                "haystack has length {}, but must be at least {}",
+                                len,
+                                V::BYTES
+                            );
+                            
+                            if let Some(cur) = self.search_chunk(start, topos) { return Some(cur); }
+                            
+                            let mut cur = start.add(V::BYTES - (start.as_usize() & V::ALIGN));
+                            debug_assert!(cur > start && end.sub(V::BYTES) >= start);
+                            
+                            if len >= Self::LOOP_SIZE
+                            {
+                                while cur <= end.sub(Self::LOOP_SIZE)
+                                {
+                                    debug_assert_eq!(0, cur.as_usize() % V::BYTES);
+
+                                    let a = V::load_aligned(cur);
+                                    let b = V::load_aligned(cur.add(V::BYTES));
+                                    let eqa1 = self.v1.cmpeq(a);
+                                    let eqb1 = self.v1.cmpeq(b);
+                                    let eqa2 = self.v2.cmpeq(a);
+                                    let eqb2 = self.v2.cmpeq(b);
+                                    let or1 = eqa1.or(eqb1);
+                                    let or2 = eqa2.or(eqb2);
+                                    let or3 = or1.or(or2);
+                                    
+                                    if or3.movemask_will_have_non_zero()
+                                    {
+                                        let mask = eqa1.movemask().or(eqa2.movemask());
+                                        
+                                        if mask.has_non_zero() { return Some(cur.add(topos(mask))); }
+
+                                        let mask = eqb1.movemask().or(eqb2.movemask());
+                                        debug_assert!(mask.has_non_zero());
+                                        return Some(cur.add(V::BYTES).add(topos(mask)));
+                                    }
+                                    
+                                    cur = cur.add(Self::LOOP_SIZE);
+                                }
+                            }
+                            
+                            while cur <= end.sub(V::BYTES)
+                            {
+                                debug_assert!(end.distance(cur) >= V::BYTES);
+                                if let Some(cur) = self.search_chunk(cur, topos) { return Some(cur); }
+                                
+                                cur = cur.add(V::BYTES);
+                            }
+                            
+                            if cur < end
+                            {
+                                debug_assert!(end.distance(cur) < V::BYTES);
+                                cur = cur.sub(V::BYTES - end.distance(cur));
+                                debug_assert_eq!(end.distance(cur), V::BYTES);
+                                return self.search_chunk(cur, topos);
+                            }
+                            
+                            None
+                        }
+                        /// Return a pointer to the last occurrence of the needle in the given haystack.
+                        #[inline( always )] pub unsafe fn rfind_raw
+                        (
+                            &self,
+                            start: *const u8,
+                            end: *const u8,
+                        ) -> Option<*const u8>
+                        {
+                            debug_assert!(V::BYTES <= 32, "vector cannot be bigger than 32 bytes");
+
+                            let topos = V::Mask::last_offset;
+                            let len = end.distance(start);
+                            
+                            debug_assert!
+                            (
+                                len >= V::BYTES,
+                                "haystack has length {}, but must be at least {}",
+                                len,
+                                V::BYTES
+                            );
+
+                            if let Some(cur) = self.search_chunk(end.sub(V::BYTES), topos) { return Some(cur); }
+                            
+                            let mut cur = end.sub(end.as_usize() & V::ALIGN);
+                            debug_assert!(start <= cur && cur <= end);
+                            if len >= Self::LOOP_SIZE
+                            {
+                                while cur >= start.add(Self::LOOP_SIZE)
+                                {
+                                    debug_assert_eq!(0, cur.as_usize() % V::BYTES);
+
+                                    cur = cur.sub(Self::LOOP_SIZE);
+                                    let a = V::load_aligned(cur);
+                                    let b = V::load_aligned(cur.add(V::BYTES));
+                                    let eqa1 = self.v1.cmpeq(a);
+                                    let eqb1 = self.v1.cmpeq(b);
+                                    let eqa2 = self.v2.cmpeq(a);
+                                    let eqb2 = self.v2.cmpeq(b);
+                                    let or1 = eqa1.or(eqb1);
+                                    let or2 = eqa2.or(eqb2);
+                                    let or3 = or1.or(or2);
+                                    
+                                    if or3.movemask_will_have_non_zero()
+                                    {
+                                        let mask = eqb1.movemask().or(eqb2.movemask());
+                                        
+                                        if mask.has_non_zero() { return Some(cur.add(V::BYTES).add(topos(mask))); }
+
+                                        let mask = eqa1.movemask().or(eqa2.movemask());
+                                        debug_assert!(mask.has_non_zero());
+                                        return Some(cur.add(topos(mask)));
+                                    }
+                                }
+                            }
+                            
+                            while cur >= start.add(V::BYTES)
+                            {
+                                debug_assert!(cur.distance(start) >= V::BYTES);
+                                cur = cur.sub(V::BYTES);
+                                
+                                if let Some(cur) = self.search_chunk(cur, topos) { return Some(cur); }
+                            }
+                            
+                            if cur > start
+                            {
+                                debug_assert!(cur.distance(start) < V::BYTES);
+                                return self.search_chunk(start, topos);
+                            }
+                            
+                            None
+                        }
+                        /// Search `V::BYTES` starting at `cur` via an unaligned load.
+                        #[inline( always )] unsafe fn search_chunk
+                        (
+                            &self,
+                            cur: *const u8,
+                            mask_to_offset: impl Fn(V::Mask) -> usize,
+                        ) -> Option<*const u8>
+                        {
+                            let chunk = V::load_unaligned(cur);
+                            let eq1 = self.v1.cmpeq(chunk);
+                            let eq2 = self.v2.cmpeq(chunk);
+                            let mask = eq1.or(eq2).movemask();
+                            
+                            if mask.has_non_zero()
+                            {
+                                let mask1 = eq1.movemask();
+                                let mask2 = eq2.movemask();
+                                Some(cur.add(mask_to_offset(mask1.or(mask2))))
+                            }
+                            
+                            else { None }
+                        }
+                    }
+                    /// Finds all occurrences of two bytes in a haystack.
+                    #[derive(Clone, Copy, Debug)]
+                    pub struct Three<V>
+                    {
+                        s1: u8,
+                        s2: u8,
+                        s3: u8,
+                        v1: V,
+                        v2: V,
+                        v3: V,
+                    }
+
+                    impl<V: Vector> Three<V>
+                    {
+                        /// The number of bytes we examine per each iteration of our search loop.
+                        const LOOP_SIZE: usize = 2 * V::BYTES;
+                        /// Create a new searcher that finds occurrences of the byte given.
+                        #[inline( always )] pub unsafe fn new
+                        (
+                            needle1: u8,
+                            needle2: u8,
+                            needle3: u8,
+                        ) -> Three<V>
+                        {
+                            Three
+                            {
+                                s1: needle1,
+                                s2: needle2,
+                                s3: needle3,
+                                v1: V::splat(needle1),
+                                v2: V::splat(needle2),
+                                v3: V::splat(needle3),
+                            }
+                        }
+                        /// Returns the first needle given to `Three::new`.
+                        #[inline( always )] pub fn needle1(&self) -> u8 { self.s1 }
+                        /// Returns the second needle given to `Three::new`.
+                        #[inline( always )] pub fn needle2(&self) -> u8 { self.s2 }
+                        /// Returns the third needle given to `Three::new`.
+                        #[inline( always )] pub fn needle3(&self) -> u8 { self.s3 }
+                        /// Return a pointer to the first occurrence of one of the needles in the given haystack.
+                        #[inline( always )] pub unsafe fn find_raw
+                        (
+                            &self,
+                            start: *const u8,
+                            end: *const u8,
+                        ) -> Option<*const u8> 
+                        {
+                            debug_assert!(V::BYTES <= 32, "vector cannot be bigger than 32 bytes");
+
+                            let topos = V::Mask::first_offset;
+                            let len = end.distance(start);
+                            debug_assert!
+                            (
+                                len >= V::BYTES,
+                                "haystack has length {}, but must be at least {}",
+                                len,
+                                V::BYTES
+                            );
+                            
+                            if let Some(cur) = self.search_chunk(start, topos) { return Some(cur); }
+                            
+                            let mut cur = start.add(V::BYTES - (start.as_usize() & V::ALIGN));
+                            debug_assert!(cur > start && end.sub(V::BYTES) >= start);
+                            
+                            if len >= Self::LOOP_SIZE
+                            {
+                                while cur <= end.sub(Self::LOOP_SIZE)
+                                {
+                                    debug_assert_eq!(0, cur.as_usize() % V::BYTES);
+
+                                    let a = V::load_aligned(cur);
+                                    let b = V::load_aligned(cur.add(V::BYTES));
+                                    let eqa1 = self.v1.cmpeq(a);
+                                    let eqb1 = self.v1.cmpeq(b);
+                                    let eqa2 = self.v2.cmpeq(a);
+                                    let eqb2 = self.v2.cmpeq(b);
+                                    let eqa3 = self.v3.cmpeq(a);
+                                    let eqb3 = self.v3.cmpeq(b);
+                                    let or1 = eqa1.or(eqb1);
+                                    let or2 = eqa2.or(eqb2);
+                                    let or3 = eqa3.or(eqb3);
+                                    let or4 = or1.or(or2);
+                                    let or5 = or3.or(or4);
+                                    
+                                    if or5.movemask_will_have_non_zero()
+                                    {
+                                        let mask = eqa1
+                                        .movemask()
+                                        .or(eqa2.movemask())
+                                        .or(eqa3.movemask());
+                                        
+                                        if mask.has_non_zero() { return Some(cur.add(topos(mask))); }
+
+                                        let mask = eqb1
+                                        .movemask()
+                                        .or(eqb2.movemask())
+                                        .or(eqb3.movemask());
+                                        
+                                        debug_assert!(mask.has_non_zero());
+                                        return Some(cur.add(V::BYTES).add(topos(mask)));
+                                    }
+                                    
+                                    cur = cur.add(Self::LOOP_SIZE);
+                                }
+                            }
+                            
+                            while cur <= end.sub(V::BYTES)
+                            {
+                                debug_assert!(end.distance(cur) >= V::BYTES);
+                                
+                                if let Some(cur) = self.search_chunk(cur, topos) { return Some(cur); }
+                                
+                                cur = cur.add(V::BYTES);
+                            }
+                            
+                            if cur < end 
+                            {
+                                debug_assert!(end.distance(cur) < V::BYTES);
+                                cur = cur.sub(V::BYTES - end.distance(cur));
+                                debug_assert_eq!(end.distance(cur), V::BYTES);
+                                return self.search_chunk(cur, topos);
+                            }
+                            
+                            None
+                        }
+                        /// Return a pointer to the last occurrence of the needle in the given haystack.
+                        #[inline( always )] pub unsafe fn rfind_raw(
+                            &self,
+                            start: *const u8,
+                            end: *const u8,
+                        ) -> Option<*const u8>
+                        {
+                            debug_assert!(V::BYTES <= 32, "vector cannot be bigger than 32 bytes");
+
+                            let topos = V::Mask::last_offset;
+                            let len = end.distance(start);
+                            debug_assert!
+                            (
+                                len >= V::BYTES,
+                                "haystack has length {}, but must be at least {}",
+                                len,
+                                V::BYTES
+                            );
+
+                            if let Some(cur) = self.search_chunk(end.sub(V::BYTES), topos) { return Some(cur); }
+                            
+                            let mut cur = end.sub(end.as_usize() & V::ALIGN);
+                            debug_assert!(start <= cur && cur <= end);
+                            
+                            if len >= Self::LOOP_SIZE
+                            {
+                                while cur >= start.add(Self::LOOP_SIZE)
+                                {
+                                    debug_assert_eq!(0, cur.as_usize() % V::BYTES);
+
+                                    cur = cur.sub(Self::LOOP_SIZE);
+                                    let a = V::load_aligned(cur);
+                                    let b = V::load_aligned(cur.add(V::BYTES));
+                                    let eqa1 = self.v1.cmpeq(a);
+                                    let eqb1 = self.v1.cmpeq(b);
+                                    let eqa2 = self.v2.cmpeq(a);
+                                    let eqb2 = self.v2.cmpeq(b);
+                                    let eqa3 = self.v3.cmpeq(a);
+                                    let eqb3 = self.v3.cmpeq(b);
+                                    let or1 = eqa1.or(eqb1);
+                                    let or2 = eqa2.or(eqb2);
+                                    let or3 = eqa3.or(eqb3);
+                                    let or4 = or1.or(or2);
+                                    let or5 = or3.or(or4);
+                                    
+                                    if or5.movemask_will_have_non_zero()
+                                    {
+                                        let mask = eqb1
+                                        .movemask()
+                                        .or(eqb2.movemask())
+                                        .or(eqb3.movemask());
+                                        
+                                        if mask.has_non_zero() { return Some(cur.add(V::BYTES).add(topos(mask))); }
+
+                                        let mask = eqa1
+                                        .movemask()
+                                        .or(eqa2.movemask())
+                                        .or(eqa3.movemask());
+                                        
+                                        debug_assert!(mask.has_non_zero());
+                                        return Some(cur.add(topos(mask)));
+                                    }
+                                }
+                            }
+                            
+                            while cur >= start.add(V::BYTES)
+                            {
+                                debug_assert!(cur.distance(start) >= V::BYTES);
+                                cur = cur.sub(V::BYTES);
+                                if let Some(cur) = self.search_chunk(cur, topos) {
+                                    return Some(cur);
+                                }
+                            }
+                            
+                            if cur > start
+                            {
+                                debug_assert!(cur.distance(start) < V::BYTES);
+                                return self.search_chunk(start, topos);
+                            }
+                            
+                            None
+                        }
+                        /// Search `V::BYTES` starting at `cur` via an unaligned load.
+                        #[inline( always )] unsafe fn search_chunk
+                        (
+                            &self,
+                            cur: *const u8,
+                            mask_to_offset: impl Fn(V::Mask) -> usize,
+                        ) -> Option<*const u8>
+                        {
+                            let chunk = V::load_unaligned(cur);
+                            let eq1 = self.v1.cmpeq(chunk);
+                            let eq2 = self.v2.cmpeq(chunk);
+                            let eq3 = self.v3.cmpeq(chunk);
+                            let mask = eq1.or(eq2).or(eq3).movemask();
+                            
+                            if mask.has_non_zero()
+                            {
+                                let mask1 = eq1.movemask();
+                                let mask2 = eq2.movemask();
+                                let mask3 = eq3.movemask();
+                                Some(cur.add(mask_to_offset(mask1.or(mask2).or(mask3))))
+                            }
+                            
+                            else { None }
+                        }
+                    }
+                    /// An iterator over all occurrences of a set of bytes in a haystack.
+                    #[derive(Clone, Debug)]
+                    pub struct Iter<'h>
+                    {
+                        /// The original starting point into the haystack.
+                        original_start: *const u8,
+                        /// The current starting point into the haystack.
+                        start: *const u8,
+                        /// The current ending point into the haystack.reverse search will begin.
+                        end: *const u8,
+                        /// A marker for tracking the lifetime of the start/cur_start/cur_end pointers above, 
+                        ///which all point into the haystack.
+                        haystack: ::marker::PhantomData<&'h [u8]>,
+                    }
+
+                    impl<'h> Iter<'h>
+                    {
+                        /// Create a new generic memchr iterator.
+                        #[inline( always )] pub fn new(haystack: &'h [u8]) -> Iter<'h>
+                        {
+                            Iter
+                            {
+                                original_start: haystack.as_ptr(),
+                                start: haystack.as_ptr(),
+                                end: haystack.as_ptr().wrapping_add(haystack.len()),
+                                haystack: ::marker::PhantomData,
+                            }
+                        }
+                        /// Returns the next occurrence in the forward direction.
+                        #[inline( always )] pub unsafe fn next
+                        (
+                            &mut self,
+                            mut find_raw: impl FnMut(*const u8, *const u8) -> Option<*const u8>,
+                        ) -> Option<usize>
+                        {
+                            let found = find_raw(self.start, self.end)?;
+                            let result = found.distance(self.original_start);
+                            self.start = found.add(1);
+                            Some(result)
+                        }
+                        /// Returns the number of remaining elements in this iterator.
+                        #[inline( always )] pub fn count
+                        (
+                            self,
+                            mut count_raw: impl FnMut(*const u8, *const u8) -> usize,
+                        ) -> usize
+                        { count_raw(self.start, self.end) }
+                        /// Returns the next occurrence in reverse.
+                        #[inline( always )] pub unsafe fn next_back
+                        (
+                            &mut self,
+                            mut rfind_raw: impl FnMut(*const u8, *const u8) -> Option<*const u8>,
+                        ) -> Option<usize>
+                        {
+                            let found = rfind_raw(self.start, self.end)?;
+                            let result = found.distance(self.original_start);
+                            self.end = found;
+                            Some(result)
+                        }
+                        /// Provides an implementation of `Iterator::size_hint`.
+                        #[inline( always )] pub fn size_hint(&self) -> (usize, Option<usize>)
+                        { (0, Some(self.end.as_usize().saturating_sub(self.start.as_usize()))) }
+                    }
+                    /// Search a slice using a function that operates on raw pointers.
+                    #[inline( always )] pub unsafe fn search_slice_with_raw
+                    (
+                        haystack: &[u8],
+                        mut find_raw: impl FnMut(*const u8, *const u8) -> Option<*const u8>,
+                    ) -> Option<usize>
+                    {
+                        let start = haystack.as_ptr();
+                        let end = start.add(haystack.len());
+                        let found = find_raw(start, end)?;
+                        Some(found.distance(start))
+                    }
+                    /// Performs a forward byte-at-a-time loop until either `ptr >= end_ptr` or until `confirm(*ptr)` returns `true`.
+                    #[inline( always )] pub unsafe fn fwd_byte_by_byte<F: Fn(u8) -> bool>
+                    (
+                        start: *const u8,
+                        end: *const u8,
+                        confirm: F,
+                    ) -> Option<*const u8>
+                    {
+                        debug_assert!(start <= end);
+                        let mut ptr = start;
+                        
+                        while ptr < end
+                        {
+                            if confirm(*ptr) { return Some(ptr); }
+                            
+                            ptr = ptr.offset(1);
+                        }
+                        
+                        None
+                    }
+                    /// Performs a reverse byte-at-a-time loop until either `ptr < start_ptr`
+                    /// or until `confirm(*ptr)` returns `true`.
+                    #[inline( always )] pub unsafe fn rev_byte_by_byte<F: Fn(u8) -> bool>
+                    (
+                        start: *const u8,
+                        end: *const u8,
+                        confirm: F,
+                    ) -> Option<*const u8>
+                    {
+                        debug_assert!(start <= end);
+
+                        let mut ptr = end;
+                        
+                        while ptr > start
+                        {
+                            ptr = ptr.offset(-1);
+                            
+                            if confirm(*ptr) { return Some(ptr); }
+                        }
+                        
+                        None
+                    }
+                    /// Performs a forward byte-at-a-time loop until `ptr >= end_ptr`
+                    /// and returns the number of times `confirm(*ptr)` returns `true`.
+                    #[inline( always )] pub unsafe fn count_byte_by_byte<F: Fn(u8) -> bool>
+                    (
+                        start: *const u8,
+                        end: *const u8,
+                        confirm: F,
+                    ) -> usize
+                    {
+                        debug_assert!(start <= end);
+                        let mut ptr = start;
+                        let mut count = 0;
+                        
+                        while ptr < end
+                        {
+                            if confirm(*ptr) { count += 1; }
+                            
+                            ptr = ptr.offset(1);
+                        }
+                        
+                        count
+                    }
+
+                }
+
+                pub mod packedpair
+                {
+                    use ::
+                    {
+                        mem::chr::
+                        {
+                            arch::all::{is_equal_raw, packedpair::Pair},
+                            ext::Pointer,
+                            vector::{MoveMask, Vector},
+                        },
+                        *,
+                    };
+                    /*
+                    */
+                    /// A generic architecture dependent "packed pair" finder.
+                    #[derive(Clone, Copy, Debug)]
+                    pub struct Finder<V>
+                    {
+                        pair: Pair,
+                        v1: V,
+                        v2: V,
+                        min_haystack_len: usize,
+                    }
+
+                    impl<V: Vector> Finder<V> 
+                    {
+                        /// Create a new pair searcher.
+                        #[inline( always )] pub unsafe fn new(needle: &[u8], pair: Pair) -> Finder<V>
+                        {
+                            let max_index = pair.index1().max(pair.index2());
+                            let min_haystack_len = ::cmp::max(needle.len(), usize::from(max_index) + V::BYTES);
+                            let v1 = V::splat(needle[usize::from(pair.index1())]);
+                            let v2 = V::splat(needle[usize::from(pair.index2())]);
+                            Finder { pair, v1, v2, min_haystack_len }
+                        }
+                        /// Searches the given haystack for the given needle.
+                        #[inline( always )] pub unsafe fn find
+                        (
+                            &self,
+                            haystack: &[u8],
+                            needle: &[u8],
+                        ) -> Option<usize>
+                        {
+                            assert!
+                            (
+                                haystack.len() >= self.min_haystack_len,
+                                "haystack too small, should be at least {} but got {}",
+                                self.min_haystack_len,
+                                haystack.len(),
+                            );
+
+                            let all = V::Mask::all_zeros_except_least_significant(0);
+                            let start = haystack.as_ptr();
+                            let end = start.add(haystack.len());
+                            let max = end.sub(self.min_haystack_len);
+                            let mut cur = start;
+
+                            while cur <= max 
+                            {
+                                if let Some(chunki) = self.find_in_chunk(needle, cur, end, all)
+                                { return Some(matched(start, cur, chunki)); }
+
+                                cur = cur.add(V::BYTES);
+                            }
+                            
+                            if cur < end
+                            {
+                                let remaining = end.distance(cur);
+                                
+                                debug_assert!
+                                (
+                                    remaining < self.min_haystack_len,
+                                    "remaining bytes should be smaller than the minimum haystack \
+                                    length of {}, but there are {} bytes remaining",
+                                    self.min_haystack_len,
+                                    remaining,
+                                );
+                                
+                                if remaining < needle.len() { return None; }
+                                
+                                debug_assert!
+                                (
+                                    max < cur,
+                                    "after main loop, cur should have exceeded max",
+                                );
+
+                                let overlap = cur.distance(max);
+                                
+                                debug_assert!
+                                (
+                                    overlap > 0,
+                                    "overlap ({}) must always be non-zero",
+                                    overlap,
+                                );
+                                
+                                debug_assert!
+                                (
+                                    overlap < V::BYTES,
+                                    "overlap ({}) cannot possibly be >= than a vector ({})",
+                                    overlap,
+                                    V::BYTES,
+                                );
+                                
+                                let mask = V::Mask::all_zeros_except_least_significant(overlap);
+                                cur = max;
+                                let m = self.find_in_chunk(needle, cur, end, mask);
+
+                                if let Some(chunki) = m { return Some(matched(start, cur, chunki)); }
+                            }
+                            
+                            None
+                        }
+                        /// Searches the given haystack for offsets that represent candidate matches of the `needle`
+                        /// given to this finder's constructor.
+                        #[inline( always )] pub unsafe fn find_prefilter
+                        (
+                            &self,
+                            haystack: &[u8],
+                        ) -> Option<usize>
+                        {
+                            assert!
+                            (
+                                haystack.len() >= self.min_haystack_len,
+                                "haystack too small, should be at least {} but got {}",
+                                self.min_haystack_len,
+                                haystack.len(),
+                            );
+
+                            let start = haystack.as_ptr();
+                            let end = start.add(haystack.len());
+                            let max = end.sub(self.min_haystack_len);
+                            let mut cur = start;
+                            
+                            while cur <= max
+                            {
+                                if let Some(chunki) = self.find_prefilter_in_chunk(cur)
+                                { return Some(matched(start, cur, chunki)); }
+
+                                cur = cur.add(V::BYTES);
+                            }
+
+                            if cur < end
+                            {
+                                cur = max;
+
+                                if let Some(chunki) = self.find_prefilter_in_chunk(cur)
+                                { return Some(matched(start, cur, chunki)); }
+                            }
+                            
+                            None
+                        }
+                        /// Search for an occurrence of our byte pair from the needle in the chunk
+                        /// pointed to by cur, with the end of the haystack pointed to by end.
+                        #[inline( always )] unsafe fn find_in_chunk
+                        (
+                            &self,
+                            needle: &[u8],
+                            cur: *const u8,
+                            end: *const u8,
+                            mask: V::Mask,
+                        ) -> Option<usize>
+                        {
+                            let index1 = usize::from(self.pair.index1());
+                            let index2 = usize::from(self.pair.index2());
+                            let chunk1 = V::load_unaligned(cur.add(index1));
+                            let chunk2 = V::load_unaligned(cur.add(index2));
+                            let eq1 = chunk1.cmpeq(self.v1);
+                            let eq2 = chunk2.cmpeq(self.v2);
+
+                            let mut offsets = eq1.and(eq2).movemask().and(mask);
+                            
+                            while offsets.has_non_zero()
+                            {
+                                let offset = offsets.first_offset();
+                                let cur = cur.add(offset);
+                                
+                                if end.sub(needle.len()) < cur { return None; }
+
+                                if is_equal_raw(needle.as_ptr(), cur, needle.len()) { return Some(offset); }
+
+                                offsets = offsets.clear_least_significant_bit();
+                            }
+                            
+                            None
+                        }
+                        /// Search for an occurrence of our byte pair from the needle in the chunk pointed to by cur,
+                        /// with the end of the haystack pointed to by end.
+                        #[inline( always )] unsafe fn find_prefilter_in_chunk(&self, cur: *const u8) -> Option<usize>
+                        {
+                            let index1 = usize::from(self.pair.index1());
+                            let index2 = usize::from(self.pair.index2());
+                            let chunk1 = V::load_unaligned(cur.add(index1));
+                            let chunk2 = V::load_unaligned(cur.add(index2));
+                            let eq1 = chunk1.cmpeq(self.v1);
+                            let eq2 = chunk2.cmpeq(self.v2);
+
+                            let offsets = eq1.and(eq2).movemask();
+                            
+                            if !offsets.has_non_zero() { return None; }
+
+                            Some(offsets.first_offset())
+                        }
+                        /// Returns the pair of offsets (into the needle) used to check as a predicate before 
+                        /// confirming whether a needle exists at a particular position.
+                        #[inline] pub fn pair(&self) -> &Pair { &self.pair }
+                        /// Returns the minimum haystack length that this `Finder` can search.
+                        #[inline( always )] pub fn min_haystack_len(&self) -> usize { self.min_haystack_len }
+                    }
+                    /// Accepts a chunk-relative offset and returns a haystack relative offset.
+                    #[inline( always )] unsafe fn matched(start: *const u8, cur: *const u8, chunki: usize) -> usize
+                    { cur.distance(start) + chunki }
+                }
             }
 
             pub mod x86_64
             {
+                /*!
+                Vector algorithms for the `x86_64` target. */
                 use ::
                 {
                     *,
                 };
                 /*
                 */
+                pub mod avx2
+                {
+                    /*!
+                    Algorithms for the `x86_64` target using 256-bit vectors via AVX2. */
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    */
+                    pub mod memchr
+                    {
+                        /*!
+                        This module defines 256-bit vector implementations of `memchr` and friends. */
+                        use ::
+                        {
+                            arch::x86_64::{ __m128i, __m256i },
+                            mem::chr::
+                            {
+                                arch::generic::memchr as generic, 
+                                ext::Pointer, 
+                                vector::Vector,
+                            },
+                            *,
+                        };
+                        /*
+                        */
+                        /// Finds all occurrences of a single byte in a haystack.
+                        #[derive(Clone, Copy, Debug)]
+                        pub struct One
+                        {
+                            /// Used for haystacks less than 32 bytes.
+                            sse2: generic::One<__m128i>,
+                            /// Used for haystacks bigger than 32 bytes.
+                            avx2: generic::One<__m256i>,
+                        }
+
+                        impl One
+                        {
+                            /// Create a new searcher that finds occurrences of the needle byte given.
+                            ///
+                            /// This particular searcher is specialized to use AVX2 vector instructions
+                            /// that typically make it quite fast. (SSE2 is used for haystacks that
+                            /// are too short to accommodate an AVX2 vector.)
+                            ///
+                            /// If either SSE2 or AVX2 is unavailable in the current environment, then
+                            /// `None` is returned.
+                            #[inline] pub fn new(needle: u8) -> Option<One>
+                            {
+                                if One::is_available() {
+                                    unsafe { Some(One::new_unchecked(needle)) }
+                                } else { None }
+                            } 
+                            /// Create a new finder specific to AVX2 vectors and routines without
+                            /// checking that either SSE2 or AVX2 is available.
+                            #[target_feature(enable = "sse2", enable = "avx2")]
+                            #[inline] pub unsafe fn new_unchecked(needle: u8) -> One
+                            {
+                                One
+                                {
+                                    sse2: generic::One::new(needle),
+                                    avx2: generic::One::new(needle),
+                                }
+                            }
+                            /// Returns true when this implementation is available in the current environment.
+                            #[inline] pub fn is_available() -> bool
+                            {
+                                #[cfg(not(target_feature = "sse2"))]
+                                {
+                                    false
+                                }
+                                #[cfg(target_feature = "sse2")]
+                                {
+                                    #[cfg(target_feature = "avx2")]
+                                    {
+                                        true
+                                    }
+                                    #[cfg(not(target_feature = "avx2"))]
+                                    {
+                                        #[cfg(feature = "std")]
+                                        {
+                                            std::is_x86_feature_detected!("avx2")
+                                        }
+                                        #[cfg(not(feature = "std"))]
+                                        {
+                                            false
+                                        }
+                                    }
+                                }
+                            }
+                            /// Return the first occurrence of one of the needle bytes in the given haystack.
+                            #[inline] pub fn find(&self, haystack: &[u8]) -> Option<usize>
+                            {
+                                unsafe
+                                {
+                                    generic::search_slice_with_raw(haystack, |s, e| { self.find_raw(s, e) })
+                                }
+                            }
+                            /// Return the last occurrence of one of the needle bytes in the given haystack.
+                            #[inline] pub fn rfind(&self, haystack: &[u8]) -> Option<usize>
+                            {
+                                unsafe
+                                {
+                                    generic::search_slice_with_raw(haystack, |s, e| {
+                                        self.rfind_raw(s, e)
+                                    })
+                                }
+                            }
+                            /// Counts all occurrences of this byte in the given haystack.
+                            #[inline] pub fn count(&self, haystack: &[u8]) -> usize
+                            {
+                                unsafe
+                                {
+                                    let start = haystack.as_ptr();
+                                    let end = start.add(haystack.len());
+                                    self.count_raw(start, end)
+                                }
+                            }
+                            /// Like `find`, but accepts and returns raw pointers.
+                            #[inline] pub unsafe fn find_raw
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            {
+                                if start >= end { return None; }
+
+                                let len = end.distance(start);
+
+                                if len < __m256i::BYTES
+                                {
+                                    return if len < __m128i::BYTES
+                                    {
+                                        generic::fwd_byte_by_byte(start, end, |b| { b == self.sse2.needle1() })
+                                    }
+                                    else
+                                    {
+                                        self.find_raw_sse2(start, end)
+                                    };
+                                }
+                                
+                                self.find_raw_avx2(start, end)
+                            }
+                            /// Like `rfind`, but accepts and returns raw pointers.
+                            #[inline] pub unsafe fn rfind_raw
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            {
+                                if start >= end { return None; }
+                                let len = end.distance(start);
+                                if len < __m256i::BYTES
+                                {
+                                    return if len < __m128i::BYTES
+                                    {
+                                        generic::rev_byte_by_byte(start, end, |b| { b == self.sse2.needle1() })
+                                    }
+                                    
+                                    else { self.rfind_raw_sse2(start, end) };
+                                }
+                                
+                                self.rfind_raw_avx2(start, end)
+                            }
+                            /// Counts all occurrences of this byte in the given haystack represented by raw pointers.
+                            #[inline] pub unsafe fn count_raw(&self, start: *const u8, end: *const u8) -> usize
+                            {
+                                if start >= end { return 0; }
+
+                                let len = end.distance(start);
+                                
+                                if len < __m256i::BYTES
+                                {
+                                    return if len < __m128i::BYTES
+                                    {
+                                        generic::count_byte_by_byte(start, end, |b| { b == self.sse2.needle1() })
+                                    }
+                                    else { self.count_raw_sse2(start, end) };
+                                }
+                                
+                                self.count_raw_avx2(start, end)
+                            }
+                            /// Execute a search using SSE2 vectors and routines.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] unsafe fn find_raw_sse2
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            { self.sse2.find_raw(start, end) }
+                            /// Execute a search using SSE2 vectors and routines.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] unsafe fn rfind_raw_sse2
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            { self.sse2.rfind_raw(start, end) }
+                            /// Execute a count using SSE2 vectors and routines.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] unsafe fn count_raw_sse2
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> usize
+                            { self.sse2.count_raw(start, end) }
+                            /// Execute a search using AVX2 vectors and routines.
+                            #[target_feature(enable = "avx2")]
+                            #[inline] unsafe fn find_raw_avx2
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            { self.avx2.find_raw(start, end) }
+                            /// Execute a search using AVX2 vectors and routines.
+                            #[target_feature(enable = "avx2")]
+                            #[inline] unsafe fn rfind_raw_avx2
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            { self.avx2.rfind_raw(start, end) }
+                            /// Execute a count using AVX2 vectors and routines.
+                            #[target_feature(enable = "avx2")]
+                            #[inline] unsafe fn count_raw_avx2
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> usize { self.avx2.count_raw(start, end) }
+                            /// Returns an iterator over all occurrences of the needle byte in the given haystack.
+                            #[inline] pub fn iter<'a, 'h>(&'a self, haystack: &'h [u8]) -> OneIter<'a, 'h>
+                            {
+                                OneIter { searcher: self, it: generic::Iter::new(haystack) }
+                            }
+                        }
+                        /// An iterator over all occurrences of a single byte in a haystack.
+                        #[derive(Clone, Debug)]
+                        pub struct OneIter<'a, 'h>
+                        {
+                            searcher: &'a One,
+                            it: generic::Iter<'h>,
+                        }
+
+                        impl<'a, 'h> Iterator for OneIter<'a, 'h>
+                        {
+                            type Item = usize;
+
+                            #[inline] fn next(&mut self) -> Option<usize>
+                            {
+                                unsafe { self.it.next(|s, e| self.searcher.find_raw(s, e)) }
+                            }
+
+                            #[inline] fn count(self) -> usize
+                            {
+                                self.it.count(|s, e|
+                                {
+                                    unsafe { self.searcher.count_raw(s, e) }
+                                })
+                            }
+
+                            #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.it.size_hint() }
+                        }
+
+                        impl<'a, 'h> DoubleEndedIterator for OneIter<'a, 'h>
+                        {
+                            #[inline] fn next_back(&mut self) -> Option<usize>
+                            {
+                                unsafe { self.it.next_back(|s, e| self.searcher.rfind_raw(s, e)) }
+                            }
+                        }
+
+                        impl<'a, 'h> ::iter::FusedIterator for OneIter<'a, 'h> {}
+                        /// Finds all occurrences of two bytes in a haystack.
+                        #[derive(Clone, Copy, Debug)]
+                        pub struct Two
+                        {
+                            /// Used for haystacks less than 32 bytes.
+                            sse2: generic::Two<__m128i>,
+                            /// Used for haystacks bigger than 32 bytes.
+                            avx2: generic::Two<__m256i>,
+                        }
+
+                        impl Two
+                        {
+                            /// Create a new searcher that finds occurrences of the needle bytes given.
+                            #[inline] pub fn new(needle1: u8, needle2: u8) -> Option<Two>
+                            {
+                                if Two::is_available() { unsafe { Some(Two::new_unchecked(needle1, needle2)) } } 
+                                else { None }
+                            }
+                            /// Create a new finder specific to AVX2 vectors and routines without checking 
+                            /// that either SSE2 or AVX2 is available.
+                            #[target_feature(enable = "sse2", enable = "avx2")] 
+                            #[inline] pub unsafe fn new_unchecked(needle1: u8, needle2: u8) -> Two
+                            {
+                                Two
+                                {
+                                    sse2: generic::Two::new(needle1, needle2),
+                                    avx2: generic::Two::new(needle1, needle2),
+                                }
+                            }
+                            /// Returns true when this implementation is available in the current environment.
+                            #[inline] pub fn is_available() -> bool
+                            {
+                                #[cfg(not(target_feature = "sse2"))]
+                                {
+                                    false
+                                }
+
+                                #[cfg(target_feature = "sse2")]
+                                {
+                                    #[cfg(target_feature = "avx2")]
+                                    {
+                                        true
+                                    }
+
+                                    #[cfg(not(target_feature = "avx2"))]
+                                    {
+                                        #[cfg(feature = "std")]
+                                        {
+                                            std::is_x86_feature_detected!("avx2")
+                                        }
+
+                                        #[cfg(not(feature = "std"))]
+                                        {
+                                            false
+                                        }
+                                    }
+                                }
+                            }
+                            /// Return the first occurrence of one of the needle bytes in the given haystack.
+                            #[inline] pub fn find(&self, haystack: &[u8]) -> Option<usize>
+                            {
+                                unsafe
+                                {
+                                    generic::search_slice_with_raw(haystack, |s, e| { self.find_raw(s, e) })
+                                }
+                            }
+                            /// Return the last occurrence of one of the needle bytes in the given haystack.
+                            #[inline] pub fn rfind(&self, haystack: &[u8]) -> Option<usize>
+                            {
+                                unsafe
+                                {
+                                    generic::search_slice_with_raw(haystack, |s, e| { self.rfind_raw(s, e) })
+                                }
+                            }
+                            /// Like `find`, but accepts and returns raw pointers.
+                            #[inline] pub unsafe fn find_raw
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            {
+                                if start >= end { return None; }
+
+                                let len = end.distance(start);
+                                
+                                if len < __m256i::BYTES
+                                {
+                                    return if len < __m128i::BYTES
+                                    {
+                                        generic::fwd_byte_by_byte(start, end, |b| { b == self.sse2.needle1() || b == self.sse2.needle2() })
+                                    }
+
+                                    else { self.find_raw_sse2(start, end) };
+                                }
+
+                                self.find_raw_avx2(start, end)
+                            }
+                            /// Like `rfind`, but accepts and returns raw pointers.
+                            ///
+                            /// When a match is found, the pointer returned is guaranteed to be
+                            /// `>= start` and `< end`.
+                            ///
+                            /// This routine is useful if you're already using raw pointers and would
+                            /// like to avoid converting back to a slice before executing a search.
+                            ///
+                            /// # Safety
+                            ///
+                            /// * Both `start` and `end` must be valid for reads.
+                            /// * Both `start` and `end` must point to an initialized value.
+                            /// * Both `start` and `end` must point to the same allocated object and
+                            /// must either be in bounds or at most one byte past the end of the
+                            /// allocated object.
+                            /// * Both `start` and `end` must be _derived from_ a pointer to the same
+                            /// object.
+                            /// * The distance between `start` and `end` must not overflow `isize`.
+                            /// * The distance being in bounds must not rely on "wrapping around" the
+                            /// address space.
+                            ///
+                            /// Note that callers may pass a pair of pointers such that `start >= end`.
+                            /// In that case, `None` will always be returned.
+                            #[inline] pub unsafe fn rfind_raw
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8> {
+                                if start >= end { return None; }
+                                let len = end.distance(start);
+                                if len < __m256i::BYTES {
+                                    return if len < __m128i::BYTES {
+                                        // SAFETY: We require the caller to pass valid start/end
+                                        // pointers.
+                                        generic::rev_byte_by_byte(start, end, |b| {
+                                            b == self.sse2.needle1() || b == self.sse2.needle2()
+                                        })
+                                    } else {
+                                        // SAFETY: We require the caller to pass valid start/end
+                                        // pointers.
+                                        self.rfind_raw_sse2(start, end)
+                                    };
+                                }
+                                // SAFETY: Building a `Two` means it's safe to call both 'sse2' and
+                                // 'avx2' routines. Also, we've checked that our haystack is big
+                                // enough to run on the vector routine. Pointer validity is caller's
+                                // responsibility.
+                                //
+                                // See note in forward routine above for why we don't just call
+                                // `self.avx2.rfind_raw` directly here.
+                                self.rfind_raw_avx2(start, end)
+                            }
+                            /// Execute a search using SSE2 vectors and routines.
+                            ///
+                            /// # Safety
+                            ///
+                            /// Same as [`Two::find_raw`], except the distance between `start` and
+                            /// `end` must be at least the size of an SSE2 vector (in bytes).
+                            ///
+                            /// (The target feature safety obligation is automatically fulfilled by
+                            /// virtue of being a method on `Two`, which can only be constructed
+                            /// when it is safe to call `sse2`/`avx2` routines.)
+                            #[target_feature(enable = "sse2")]
+                            #[inline] unsafe fn find_raw_sse2
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8> {
+                                self.sse2.find_raw(start, end)
+                            }
+                            /// Execute a search using SSE2 vectors and routines.
+                            ///
+                            /// # Safety
+                            ///
+                            /// Same as [`Two::rfind_raw`], except the distance between `start` and
+                            /// `end` must be at least the size of an SSE2 vector (in bytes).
+                            ///
+                            /// (The target feature safety obligation is automatically fulfilled by
+                            /// virtue of being a method on `Two`, which can only be constructed
+                            /// when it is safe to call `sse2`/`avx2` routines.)
+                            #[target_feature(enable = "sse2")]
+                            #[inline] unsafe fn rfind_raw_sse2
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8> {
+                                self.sse2.rfind_raw(start, end)
+                            }
+                            /// Execute a search using AVX2 vectors and routines.
+                            ///
+                            /// # Safety
+                            ///
+                            /// Same as [`Two::find_raw`], except the distance between `start` and
+                            /// `end` must be at least the size of an AVX2 vector (in bytes).
+                            ///
+                            /// (The target feature safety obligation is automatically fulfilled by
+                            /// virtue of being a method on `Two`, which can only be constructed
+                            /// when it is safe to call `sse2`/`avx2` routines.)
+                            #[target_feature(enable = "avx2")]
+                            #[inline] unsafe fn find_raw_avx2
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8> {
+                                self.avx2.find_raw(start, end)
+                            }
+                            /// Execute a search using AVX2 vectors and routines.
+                            ///
+                            /// # Safety
+                            ///
+                            /// Same as [`Two::rfind_raw`], except the distance between `start` and
+                            /// `end` must be at least the size of an AVX2 vector (in bytes).
+                            ///
+                            /// (The target feature safety obligation is automatically fulfilled by
+                            /// virtue of being a method on `Two`, which can only be constructed
+                            /// when it is safe to call `sse2`/`avx2` routines.)
+                            #[target_feature(enable = "avx2")]
+                            #[inline] unsafe fn rfind_raw_avx2
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8> {
+                                self.avx2.rfind_raw(start, end)
+                            }
+                            /// Returns an iterator over all occurrences of the needle bytes in the
+                            /// given haystack.
+                            ///
+                            /// The iterator returned implements `DoubleEndedIterator`. This means it
+                            /// can also be used to find occurrences in reverse order.
+                            #[inline] pub fn iter<'a, 'h>(&'a self, haystack: &'h [u8]) -> TwoIter<'a, 'h> {
+                                TwoIter { searcher: self, it: generic::Iter::new(haystack) }
+                            }
+                        }
+                        /// An iterator over all occurrences of two possible bytes in a haystack.
+                        #[derive(Clone, Debug)]
+                        pub struct TwoIter<'a, 'h>
+                        {
+                            searcher: &'a Two,
+                            it: generic::Iter<'h>,
+                        }
+
+                        impl<'a, 'h> Iterator for TwoIter<'a, 'h>
+                        {
+                            type Item = usize;
+
+                            #[inline] fn next(&mut self) -> Option<usize>
+                            { unsafe { self.it.next(|s, e| self.searcher.find_raw(s, e)) } }
+
+                            #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.it.size_hint() }
+                        }
+
+                        impl<'a, 'h> DoubleEndedIterator for TwoIter<'a, 'h>
+                        {
+                            #[inline] fn next_back(&mut self) -> Option<usize>
+                            {
+                                unsafe { self.it.next_back(|s, e| self.searcher.rfind_raw(s, e)) }
+                            }
+                        }
+
+                        impl<'a, 'h> ::iter::FusedIterator for TwoIter<'a, 'h> {}
+                        /// Finds all occurrences of three bytes in a haystack.
+                        #[derive(Clone, Copy, Debug)]
+                        pub struct Three
+                        {
+                            /// Used for haystacks less than 32 bytes.
+                            sse2: generic::Three<__m128i>,
+                            /// Used for haystacks bigger than 32 bytes.
+                            avx2: generic::Three<__m256i>,
+                        }
+
+                        impl Three
+                        {
+                            /// Create a new searcher that finds occurrences of the needle bytes given.
+                            #[inline] pub fn new(needle1: u8, needle2: u8, needle3: u8) -> Option<Three>
+                            {
+                                if Three::is_available()
+                                {
+                                    unsafe { Some(Three::new_unchecked(needle1, needle2, needle3)) }
+                                } else { None }
+                            }
+                            /// Create a new finder specific to AVX2 vectors and routines without
+                            /// checking that either SSE2 or AVX2 is available.
+                            #[target_feature(enable = "sse2", enable = "avx2")]
+                            #[inline] pub unsafe fn new_unchecked
+                            (
+                                needle1: u8,
+                                needle2: u8,
+                                needle3: u8,
+                            ) -> Three
+                            {
+                                Three
+                                {
+                                    sse2: generic::Three::new(needle1, needle2, needle3),
+                                    avx2: generic::Three::new(needle1, needle2, needle3),
+                                }
+                            }
+                            /// Returns true when this implementation is available in the current environment.
+                            #[inline] pub fn is_available() -> bool
+                            {
+                                #[cfg(not(target_feature = "sse2"))]
+                                {
+                                    false
+                                }
+                                #[cfg(target_feature = "sse2")]
+                                {
+                                    #[cfg(target_feature = "avx2")]
+                                    {
+                                        true
+                                    }
+                                    #[cfg(not(target_feature = "avx2"))]
+                                    {
+                                        #[cfg(feature = "std")]
+                                        {
+                                            std::is_x86_feature_detected!("avx2")
+                                        }
+                                        #[cfg(not(feature = "std"))]
+                                        {
+                                            false
+                                        }
+                                    }
+                                }
+                            }
+                            /// Return the first occurrence of one of the needle bytes in the given haystack.
+                            #[inline] pub fn find(&self, haystack: &[u8]) -> Option<usize>
+                            {
+                                unsafe
+                                {
+                                    generic::search_slice_with_raw(haystack, |s, e| { self.find_raw(s, e) })
+                                }
+                            }
+                            /// Return the last occurrence of one of the needle bytes in the given haystack.
+                            #[inline] pub fn rfind(&self, haystack: &[u8]) -> Option<usize>
+                            {
+                                unsafe
+                                {
+                                    generic::search_slice_with_raw(haystack, |s, e|
+                                    {
+                                        self.rfind_raw(s, e)
+                                    })
+                                }
+                            }
+                            /// Like `find`, but accepts and returns raw pointers.
+                            #[inline] pub unsafe fn find_raw
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            {
+                                if start >= end { return None; }
+                                let len = end.distance(start);
+                                if len < __m256i::BYTES
+                                {
+                                    return if len < __m128i::BYTES
+                                    {
+                                        generic::fwd_byte_by_byte(start, end, |b|
+                                        {
+                                            b == self.sse2.needle1()
+                                                || b == self.sse2.needle2()
+                                                || b == self.sse2.needle3()
+                                        })
+                                    } else { self.find_raw_sse2(start, end) };
+                                }
+                                
+                                self.find_raw_avx2(start, end)
+                            }
+                            /// Like `rfind`, but accepts and returns raw pointers.
+                            #[inline] pub unsafe fn rfind_raw
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8> 
+                            {
+                                if start >= end { return None; }
+                                
+                                let len = end.distance(start);
+
+                                if len < __m256i::BYTES {
+                                    return if len < __m128i::BYTES
+                                    {
+                                        generic::rev_byte_by_byte(start, end, |b|
+                                        {
+                                            b == self.sse2.needle1()
+                                                || b == self.sse2.needle2()
+                                                || b == self.sse2.needle3()
+                                        })
+                                    }
+                                    else { self.rfind_raw_sse2(start, end) };
+                                }
+                                
+                                self.rfind_raw_avx2(start, end)
+                            }
+                            /// Execute a search using SSE2 vectors and routines.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] unsafe fn find_raw_sse2
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            { self.sse2.find_raw(start, end) }
+                            /// Execute a search using SSE2 vectors and routines.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] unsafe fn rfind_raw_sse2
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            { self.sse2.rfind_raw(start, end) }
+                            /// Execute a search using AVX2 vectors and routines.
+                            #[target_feature(enable = "avx2")]
+                            #[inline] unsafe fn find_raw_avx2
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            { self.avx2.find_raw(start, end) }
+                            /// Execute a search using AVX2 vectors and routines.
+                            #[target_feature(enable = "avx2")]
+                            #[inline] unsafe fn rfind_raw_avx
+                            
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            { self.avx2.rfind_raw(start, end) }
+                            /// Returns an iterator over all occurrences of the needle bytes in the given haystack.
+                            #[inline] pub fn iter<'a, 'h>(&'a self, haystack: &'h [u8]) -> ThreeIter<'a, 'h>
+                            { ThreeIter { searcher: self, it: generic::Iter::new(haystack) } }
+                        }
+                        /// An iterator over all occurrences of three possible bytes in a haystack.
+                        #[derive(Clone, Debug)]
+                        pub struct ThreeIter<'a, 'h>
+                        {
+                            searcher: &'a Three,
+                            it: generic::Iter<'h>,
+                        }
+
+                        impl<'a, 'h> Iterator for ThreeIter<'a, 'h>
+                        {
+                            type Item = usize;
+
+                            #[inline] fn next(&mut self) -> Option<usize> { unsafe { self.it.next(|s, e| self.searcher.find_raw(s, e)) } }
+
+                            #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.it.size_hint() }
+                        }
+
+                        impl<'a, 'h> DoubleEndedIterator for ThreeIter<'a, 'h>
+                        {
+                            #[inline] fn next_back(&mut self) -> Option<usize>
+                            { unsafe { self.it.next_back(|s, e| self.searcher.rfind_raw(s, e)) } }
+                        }
+
+                        impl<'a, 'h> ::iter::FusedIterator for ThreeIter<'a, 'h> {}
+                    }
+
+                    pub mod packedpair
+                    {
+                        /*!
+                        A 256-bit vector implementation of the "packed pair" SIMD algorithm.*/
+                        use ::
+                        {
+                            arch::x86_64::{__m128i, __m256i},
+                            mem::chr::
+                            {
+                                arch::
+                                {
+                                    all::packedpair::Pair,
+                                    generic::packedpair,
+                                }
+                            },
+                            *,
+                        };
+                        /*
+                        */
+                        /// A "packed pair" finder that uses 256-bit vector operations.
+                        #[derive(Clone, Copy, Debug)]
+                        pub struct Finder 
+                        {
+                            sse2: packedpair::Finder<__m128i>,
+                            avx2: packedpair::Finder<__m256i>,
+                        }
+
+                        impl Finder
+                        {
+                            /// Create a new pair searcher. The searcher returned can either report
+                            /// exact matches of `needle` or act as a prefilter and report candidate
+                            /// positions of `needle`.
+                            #[inline] pub fn new(needle: &[u8]) -> Option<Finder>
+                            { Finder::with_pair(needle, Pair::new(needle)?) }
+                            /// Create a new "packed pair" finder using the pair of bytes given.
+                            #[inline] pub fn with_pair(needle: &[u8], pair: Pair) -> Option<Finder>
+                            {
+                                if Finder::is_available() { unsafe { Some(Finder::with_pair_impl(needle, pair)) } }
+                                else { None }
+                            }
+                            /// Create a new `Finder` specific to SSE2 vectors and routines.
+                            #[target_feature(enable = "sse2", enable = "avx2")]
+                            #[inline] unsafe fn with_pair_impl(needle: &[u8], pair: Pair) -> Finder
+                            {
+                                let sse2 = packedpair::Finder::<__m128i>::new(needle, pair);
+                                let avx2 = packedpair::Finder::<__m256i>::new(needle, pair);
+                                Finder { sse2, avx2 }
+                            }
+                            /// Returns true when this implementation is available in the current environment.
+                            #[inline] pub fn is_available() -> bool
+                            {
+                                #[cfg(not(target_feature = "sse2"))]
+                                {
+                                    false
+                                }
+                                #[cfg(target_feature = "sse2")]
+                                {
+                                    #[cfg(target_feature = "avx2")]
+                                    {
+                                        true
+                                    }
+                                    #[cfg(not(target_feature = "avx2"))]
+                                    {
+                                        #[cfg(feature = "std")]
+                                        {
+                                            std::is_x86_feature_detected!("avx2")
+                                        }
+                                        #[cfg(not(feature = "std"))]
+                                        {
+                                            false
+                                        }
+                                    }
+                                }
+                            }
+                            /// Execute a search using AVX2 vectors and routines.
+                            #[inline] pub fn find(&self, haystack: &[u8], needle: &[u8]) -> Option<usize>
+                            { unsafe { self.find_impl(haystack, needle) } }
+                            /// Run this finder on the given haystack as a prefilter.
+                            #[inline] pub fn find_prefilter(&self, haystack: &[u8]) -> Option<usize>
+                            { unsafe { self.find_prefilter_impl(haystack) } }
+                            /// Execute a search using AVX2 vectors and routines.
+                            #[target_feature(enable = "sse2", enable = "avx2")]
+                            #[inline] unsafe fn find_impl
+                            
+                            (
+                                &self,
+                                haystack: &[u8],
+                                needle: &[u8],
+                            ) -> Option<usize>
+                            {
+                                if haystack.len() < self.avx2.min_haystack_len() { self.sse2.find(haystack, needle) }
+                                else { self.avx2.find(haystack, needle) }
+                            }
+                            /// Execute a prefilter search using AVX2 vectors and routines.
+                            #[target_feature(enable = "sse2", enable = "avx2")]
+                            #[inline] unsafe fn find_prefilter_impl(&self, haystack: &[u8]) -> Option<usize>
+                            {
+                                if haystack.len() < self.avx2.min_haystack_len() { self.sse2.find_prefilter(haystack) }
+
+                                else { self.avx2.find_prefilter(haystack) }
+                            }
+                            /// Returns the pair of offsets (into the needle) used to check as a predicate before 
+                            /// confirming whether a needle exists at a particular position.
+                            #[inline] pub fn pair(&self) -> &Pair { self.avx2.pair() }
+                            /// Returns the minimum haystack length that this `Finder` can search.
+                            #[inline] pub fn min_haystack_len(&self) -> usize { self.sse2.min_haystack_len() }
+                        }
+
+                    }
+                }
+
+                pub mod sse2
+                {
+                    /*!
+                    Algorithms for the `x86_64` target using 128-bit vectors via SSE2. */
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    */
+                    pub mod memchr
+                    {
+                        /*!
+                        This module defines 128-bit vector implementations of `memchr` and friends. */
+                        use ::
+                        {
+                            arch::x86_64::__m128i,
+                            mem::chr::
+                            {
+                                arch::generic::memchr as generic, ext::Pointer, vector::Vector,
+                            },
+                            *,
+                        };
+                        /*
+                        */
+                        /// Finds all occurrences of a single byte in a haystack.
+                        #[derive(Clone, Copy, Debug)]
+                        pub struct One(generic::One<__m128i>);
+
+                        impl One
+                        {
+                            /// Create a new searcher that finds occurrences of the needle byte given.
+                            #[inline] pub fn new(needle: u8) -> Option<One>
+                            {
+                                if One::is_available() { unsafe { Some(One::new_unchecked(needle)) } }
+                                else { None }
+                            }
+                            /// Create a new finder specific to SSE2 vectors and routines without
+                            /// checking that SSE2 is available.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] pub unsafe fn new_unchecked(needle: u8) -> One
+                            { One(generic::One::new(needle)) }
+                            /// Returns true when this implementation is available in the current environment.
+                            #[inline] pub fn is_available() -> bool
+                            {
+                                #[cfg(target_feature = "sse2")] { true }
+                                #[cfg(not(target_feature = "sse2"))] { false }
+                            }
+                            /// Return the first occurrence of one of the needle bytes in the given haystack.
+                            #[inline] pub fn find(&self, haystack: &[u8]) -> Option<usize>
+                            {
+                                unsafe
+                                {
+                                    generic::search_slice_with_raw(haystack, |s, e| { self.find_raw(s, e) })
+                                }
+                            }
+                            /// Return the last occurrence of one of the needle bytes in the given haystack.
+                            #[inline] pub fn rfind(&self, haystack: &[u8]) -> Option<usize>
+                            {
+                                unsafe
+                                {
+                                    generic::search_slice_with_raw(haystack, |s, e| { self.rfind_raw(s, e) })
+                                }
+                            }
+                            /// Counts all occurrences of this byte in the given haystack.
+                            #[inline] pub fn count(&self, haystack: &[u8]) -> usize
+                            {
+                                unsafe
+                                {
+                                    let start = haystack.as_ptr();
+                                    let end = start.add(haystack.len());
+                                    self.count_raw(start, end)
+                                }
+                            }
+                            /// Like `find`, but accepts and returns raw pointers.
+                            #[inline] pub unsafe fn find_raw
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            {
+                                if start >= end { return None; }
+
+                                if end.distance(start) < __m128i::BYTES
+                                {
+                                    return generic::fwd_byte_by_byte(start, end, |b| { b == self.0.needle1() });
+                                }
+
+                                self.find_raw_impl(start, end)
+                            }
+                            /// Like `rfind`, but accepts and returns raw pointers.                            
+                            #[inline] pub unsafe fn rfind_raw
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            {
+                                if start >= end { return None; }
+
+                                if end.distance(start) < __m128i::BYTES
+                                {
+                                    return generic::rev_byte_by_byte(start, end, |b| { b == self.0.needle1() });
+                                }
+                                
+                                self.rfind_raw_impl(start, end)
+                            }
+                            /// Counts all occurrences of this byte in the given haystack represented by raw pointers.
+                            #[inline] pub unsafe fn count_raw(&self, start: *const u8, end: *const u8) -> usize
+                            {
+                                if start >= end { return 0; }
+
+                                if end.distance(start) < __m128i::BYTES
+                                {
+                                    return generic::count_byte_by_byte(start, end, |b| { b == self.0.needle1() });
+                                }
+
+                                self.count_raw_impl(start, end)
+                            }
+                            /// Execute a search using SSE2 vectors and routines.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] unsafe fn find_raw_impl
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            { self.0.find_raw(start, end) }
+                            /// Execute a search using SSE2 vectors and routines.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] unsafe fn rfind_raw_impl
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            { self.0.rfind_raw(start, end) }
+                            /// Execute a count using SSE2 vectors and routines.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] unsafe fn count_raw_impl
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> usize {
+                                self.0.count_raw(start, end)
+                            }
+                            /// Returns an iterator over all occurrences of the needle byte in the given haystack.
+                            #[inline] pub fn iter<'a, 'h>(&'a self, haystack: &'h [u8]) -> OneIter<'a, 'h>
+                            {
+                                OneIter { searcher: self, it: generic::Iter::new(haystack) }
+                            }
+                        }
+                        /// An iterator over all occurrences of a single byte in a haystack.
+                        #[derive(Clone, Debug)]
+                        pub struct OneIter<'a, 'h>
+                        {
+                            searcher: &'a One,
+                            it: generic::Iter<'h>,
+                        }
+
+                        impl<'a, 'h> Iterator for OneIter<'a, 'h>
+                        {
+                            type Item = usize;
+
+                            #[inline] fn next(&mut self) -> Option<usize>
+                            {
+                                unsafe { self.it.next(|s, e| self.searcher.find_raw(s, e)) }
+                            }
+
+                            #[inline] fn count(self) -> usize 
+                            { self.it.count(|s, e| { unsafe { self.searcher.count_raw(s, e) } }) }
+
+                            #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.it.size_hint() }
+                        }
+
+                        impl<'a, 'h> DoubleEndedIterator for OneIter<'a, 'h>
+                        {
+                            #[inline] fn next_back(&mut self) -> Option<usize>
+                            {
+                                unsafe
+                                { self.it.next_back(|s, e| self.searcher.rfind_raw(s, e)) }
+                            }
+                        }
+
+                        impl<'a, 'h> core::iter::FusedIterator for OneIter<'a, 'h> {}
+                        /// Finds all occurrences of two bytes in a haystack.
+                        #[derive(Clone, Copy, Debug)]
+                        pub struct Two(generic::Two<__m128i>);
+
+                        impl Two
+                        {
+                            /// Create a new searcher that finds occurrences of the needle bytes given.
+                            #[inline] pub fn new(needle1: u8, needle2: u8) -> Option<Two>
+                            {
+                                if Two::is_available() { unsafe { Some(Two::new_unchecked(needle1, needle2)) } }
+                                else { None }
+                            }
+                            /// Create a new finder specific to SSE2 vectors and routines without
+                            /// checking that SSE2 is available.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] pub unsafe fn new_unchecked(needle1: u8, needle2: u8) -> Two
+                            { Two(generic::Two::new(needle1, needle2)) }
+                            /// Returns true when this implementation is available in the current environment.
+                            #[inline] pub fn is_available() -> bool
+                            {
+                                #[cfg(target_feature = "sse2")] { true }
+                                #[cfg(not(target_feature = "sse2"))] { false }
+                            }
+                            /// Return the first occurrence of one of the needle bytes in the given haystack.
+                            #[inline] pub fn find(&self, haystack: &[u8]) -> Option<usize>
+                            {
+                                unsafe
+                                {
+                                    generic::search_slice_with_raw(haystack, |s, e| { self.find_raw(s, e) })
+                                }
+                            }
+                            /// Return the last occurrence of one of the needle bytes in the given
+                            /// haystack.
+                            #[inline] pub fn rfind(&self, haystack: &[u8]) -> Option<usize>
+                            {
+                                unsafe
+                                {
+                                    generic::search_slice_with_raw(haystack, |s, e| { self.rfind_raw(s, e) })
+                                }
+                            }
+                            /// Like `find`, but accepts and returns raw pointers.
+                            #[inline] pub unsafe fn find_raw
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            {
+                                if start >= end { return None; }
+                                
+                                if end.distance(start) < __m128i::BYTES
+                                {
+                                    return generic::fwd_byte_by_byte
+                                    (
+                                        start, 
+                                        end, 
+                                        | b | { b == self.0.needle1() || b == self.0.needle2() }
+                                    );
+                                }
+                                
+                                self.find_raw_impl(start, end)
+                            }
+                            /// Like `rfind`, but accepts and returns raw pointers.
+                            #[inline] pub unsafe fn rfind_raw
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            {
+                                if start >= end { return None; }
+
+                                if end.distance(start) < __m128i::BYTES
+                                {
+                                    return generic::rev_byte_by_byte
+                                    (
+                                        start, 
+                                        end,
+                                        |b| { b == self.0.needle1() || b == self.0.needle2() }
+                                    );
+                                }
+                                
+                                self.rfind_raw_impl(start, end)
+                            }
+                            /// Execute a search using SSE2 vectors and routines.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] unsafe fn find_raw_impl
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            { self.0.find_raw(start, end) }
+                            /// Execute a search using SSE2 vectors and routines.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] unsafe fn rfind_raw_impl
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            { self.0.rfind_raw(start, end) }
+                            /// Returns an iterator over all occurrences of the needle bytes in the given haystack.
+                            #[inline] pub fn iter<'a, 'h>(&'a self, haystack: &'h [u8]) -> TwoIter<'a, 'h>
+                            { TwoIter { searcher: self, it: generic::Iter::new(haystack) } }
+                        }
+                        /// An iterator over all occurrences of two possible bytes in a haystack.
+                        #[derive(Clone, Debug)]
+                        pub struct TwoIter<'a, 'h>
+                        {
+                            searcher: &'a Two,
+                            it: generic::Iter<'h>,
+                        }
+
+                        impl<'a, 'h> Iterator for TwoIter<'a, 'h>
+                        {
+                            type Item = usize;
+
+                            #[inline] fn next(&mut self) -> Option<usize>
+                            {
+                                unsafe
+                                { self.it.next(|s, e| self.searcher.find_raw(s, e)) }
+                            }
+
+                            #[inline] fn size_hint(&self) -> (usize, Option<usize>) {
+                                self.it.size_hint()
+                            }
+                        }
+
+                        impl<'a, 'h> DoubleEndedIterator for TwoIter<'a, 'h>
+                        {
+                            #[inline] fn next_back(&mut self) -> Option<usize>
+                            {
+                                unsafe
+                                { self.it.next_back(|s, e| self.searcher.rfind_raw(s, e)) }
+                            }
+                        }
+
+                        impl<'a, 'h> core::iter::FusedIterator for TwoIter<'a, 'h> {}
+                        /// Finds all occurrences of three bytes in a haystack.
+                        #[derive(Clone, Copy, Debug)]
+                        pub struct Three(generic::Three<__m128i>);
+
+                        impl Three 
+                        {
+                            /// Create a new searcher that finds occurrences of the needle bytes given.
+                            #[inline] pub fn new(needle1: u8, needle2: u8, needle3: u8) -> Option<Three> 
+                            {
+                                if Three::is_available() 
+                                { unsafe { Some(Three::new_unchecked(needle1, needle2, needle3)) } }
+                                
+                                else { None }
+                            }
+                            /// Create a new finder specific to SSE2 vectors and routines without
+                            /// checking that SSE2 is available.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] pub unsafe fn new_unchecked
+                            (
+                                needle1: u8,
+                                needle2: u8,
+                                needle3: u8,
+                            ) -> Three
+                            { Three(generic::Three::new(needle1, needle2, needle3)) }
+                            /// Returns true when this implementation is available in the current environment.
+                            #[inline] pub fn is_available() -> bool 
+                            {
+                                #[cfg(target_feature = "sse2")]
+                                {
+                                    true
+                                }
+                                #[cfg(not(target_feature = "sse2"))]
+                                {
+                                    false
+                                }
+                            }
+                            /// Return the first occurrence of one of the needle bytes in the given haystack.
+                            #[inline] pub fn find(&self, haystack: &[u8]) -> Option<usize>
+                            {
+                                unsafe
+                                {
+                                    generic::search_slice_with_raw(haystack, |s, e| { self.find_raw(s, e) })
+                                }
+                            }
+                            /// Return the last occurrence of one of the needle bytes in the given haystack.
+                            #[inline] pub fn rfind(&self, haystack: &[u8]) -> Option<usize>
+                            {
+                                unsafe
+                                {
+                                    generic::search_slice_with_raw(haystack, |s, e| { self.rfind_raw(s, e) })
+                                }
+                            }
+                            /// Like `find`, but accepts and returns raw pointers.
+                            #[inline] pub unsafe fn find_raw
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            {
+                                if start >= end { return None; }
+
+                                if end.distance(start) < __m128i::BYTES
+                                {
+                                    return generic::fwd_byte_by_byte
+                                    (
+                                        start, 
+                                        end, 
+                                        |b|
+                                        {
+                                            b == self.0.needle1()
+                                            || b == self.0.needle2()
+                                            || b == self.0.needle3()
+                                        });
+                                }
+                                
+                                self.find_raw_impl(start, end)
+                            }
+                            /// Like `rfind`, but accepts and returns raw pointers.
+                            #[inline] pub unsafe fn rfind_raw
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            {
+                                if start >= end { return None; }
+
+                                if end.distance(start) < __m128i::BYTES
+                                {
+                                    return generic::rev_byte_by_byte
+                                    (
+                                        start, 
+                                        end, 
+                                        |b|
+                                        {
+                                            b == self.0.needle1()
+                                            || b == self.0.needle2()
+                                            || b == self.0.needle3()
+                                        }
+                                    );
+                                }
+                                
+                                self.rfind_raw_impl(start, end)
+                            }
+                            /// Execute a search using SSE2 vectors and routines.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] unsafe fn find_raw_impl
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            { self.0.find_raw(start, end) }
+                            /// Execute a search using SSE2 vectors and routines.
+                            #[target_feature(enable = "sse2")]
+                            #[inline] unsafe fn rfind_raw_impl
+                            (
+                                &self,
+                                start: *const u8,
+                                end: *const u8,
+                            ) -> Option<*const u8>
+                            { self.0.rfind_raw(start, end) }
+                            /// Returns an iterator over all occurrences of the needle byte in the given haystack.
+                            #[inline] pub fn iter<'a, 'h>(&'a self, haystack: &'h [u8]) -> ThreeIter<'a, 'h>
+                            {
+                                ThreeIter { searcher: self, it: generic::Iter::new(haystack) }
+                            }
+                        }
+                        /// An iterator over all occurrences of three possible bytes in a haystack.
+                        #[derive(Clone, Debug)]
+                        pub struct ThreeIter<'a, 'h>
+                        {
+                            searcher: &'a Three,
+                            it: generic::Iter<'h>,
+                        }
+
+                        impl<'a, 'h> Iterator for ThreeIter<'a, 'h>
+                        {
+                            type Item = usize;
+
+                            #[inline] fn next(&mut self) -> Option<usize>
+                            {
+                                unsafe { self.it.next(|s, e| self.searcher.find_raw(s, e)) }
+                            }
+
+                            #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.it.size_hint() }
+                        }
+
+                        impl<'a, 'h> DoubleEndedIterator for ThreeIter<'a, 'h>
+                        {
+                            #[inline] fn next_back(&mut self) -> Option<usize>
+                            {
+                                unsafe
+                                { self.it.next_back(|s, e| self.searcher.rfind_raw(s, e)) }
+                            }
+                        }
+
+                        impl<'a, 'h> core::iter::FusedIterator for ThreeIter<'a, 'h> {}
+                    }
+
+                    pub mod packedpair
+                    {
+                        use ::
+                        {
+                            *,
+                        };
+                        /*
+                        */
+
+                    }
+
+
+                }
+
+                pub mod memchr
+                {
+                    use ::
+                    {
+                        *,
+                    };
+                    /*
+                    */
+                }
             }
         }
 
@@ -8131,38 +11771,31 @@ pub mod mem
 
                     type Mask = SensibleMoveMask;
 
-                    #[inline(always)]
-                    unsafe fn splat(byte: u8) -> __m128i {
+                    #[inline( always )] unsafe fn splat(byte: u8) -> __m128i {
                         _mm_set1_epi8(byte as i8)
                     }
 
-                    #[inline(always)]
-                    unsafe fn load_aligned(data: *const u8) -> __m128i {
+                    #[inline( always )] unsafe fn load_aligned(data: *const u8) -> __m128i {
                         _mm_load_si128(data as *const __m128i)
                     }
 
-                    #[inline(always)]
-                    unsafe fn load_unaligned(data: *const u8) -> __m128i {
+                    #[inline( always )] unsafe fn load_unaligned(data: *const u8) -> __m128i {
                         _mm_loadu_si128(data as *const __m128i)
                     }
 
-                    #[inline(always)]
-                    unsafe fn movemask(self) -> SensibleMoveMask {
+                    #[inline( always )] unsafe fn movemask(self) -> SensibleMoveMask {
                         SensibleMoveMask(_mm_movemask_epi8(self) as u32)
                     }
 
-                    #[inline(always)]
-                    unsafe fn cmpeq(self, vector2: Self) -> __m128i {
+                    #[inline( always )] unsafe fn cmpeq(self, vector2: Self) -> __m128i {
                         _mm_cmpeq_epi8(self, vector2)
                     }
 
-                    #[inline(always)]
-                    unsafe fn and(self, vector2: Self) -> __m128i {
+                    #[inline( always )] unsafe fn and(self, vector2: Self) -> __m128i {
                         _mm_and_si128(self, vector2)
                     }
 
-                    #[inline(always)]
-                    unsafe fn or(self, vector2: Self) -> __m128i {
+                    #[inline( always )] unsafe fn or(self, vector2: Self) -> __m128i {
                         _mm_or_si128(self, vector2)
                     }
                 }
@@ -8182,38 +11815,31 @@ pub mod mem
 
                     type Mask = SensibleMoveMask;
 
-                    #[inline(always)]
-                    unsafe fn splat(byte: u8) -> __m256i {
+                    #[inline( always )] unsafe fn splat(byte: u8) -> __m256i {
                         _mm256_set1_epi8(byte as i8)
                     }
 
-                    #[inline(always)]
-                    unsafe fn load_aligned(data: *const u8) -> __m256i {
+                    #[inline( always )] unsafe fn load_aligned(data: *const u8) -> __m256i {
                         _mm256_load_si256(data as *const __m256i)
                     }
 
-                    #[inline(always)]
-                    unsafe fn load_unaligned(data: *const u8) -> __m256i {
+                    #[inline( always )] unsafe fn load_unaligned(data: *const u8) -> __m256i {
                         _mm256_loadu_si256(data as *const __m256i)
                     }
 
-                    #[inline(always)]
-                    unsafe fn movemask(self) -> SensibleMoveMask {
+                    #[inline( always )] unsafe fn movemask(self) -> SensibleMoveMask {
                         SensibleMoveMask(_mm256_movemask_epi8(self) as u32)
                     }
 
-                    #[inline(always)]
-                    unsafe fn cmpeq(self, vector2: Self) -> __m256i {
+                    #[inline( always )] unsafe fn cmpeq(self, vector2: Self) -> __m256i {
                         _mm256_cmpeq_epi8(self, vector2)
                     }
 
-                    #[inline(always)]
-                    unsafe fn and(self, vector2: Self) -> __m256i {
+                    #[inline( always )] unsafe fn and(self, vector2: Self) -> __m256i {
                         _mm256_and_si256(self, vector2)
                     }
 
-                    #[inline(always)]
-                    unsafe fn or(self, vector2: Self) -> __m256i {
+                    #[inline( always )] unsafe fn or(self, vector2: Self) -> __m256i {
                         _mm256_or_si256(self, vector2)
                     }
                 }
@@ -10436,4 +14062,4 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>>
 {
     domain()
 }
-// 10439 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// 14065 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
