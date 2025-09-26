@@ -87,13 +87,13 @@ pub mod __
 		) => {
 			// Declared in the scope of the `bitflags!` call
 			// This type appears in the end-user's API
-			$crate::__declare_public_bitflags! {
+			::__declare_public_bitflags! {
 				$(#[$outer])*
 				$vis struct $BitFlags
 			}
 
 			// Workaround for: https://github.com/bitflags/bitflags/issues/320
-			$crate::__impl_public_bitflags_consts! {
+			::__impl_public_bitflags_consts! {
 				$BitFlags: $T {
 					$(
 						$(#[$inner $($args)*])*
@@ -118,11 +118,11 @@ pub mod __
 			const _: () = {
 				// Declared in a "hidden" scope that can't be reached directly
 				// These types don't appear in the end-user's API
-				$crate::__declare_internal_bitflags! {
+				::__declare_internal_bitflags! {
 					$vis struct InternalBitFlags: $T
 				}
 
-				$crate::__impl_internal_bitflags! {
+				::__impl_internal_bitflags! {
 					InternalBitFlags: $T, $BitFlags {
 						$(
 							$(#[$inner $($args)*])*
@@ -132,7 +132,7 @@ pub mod __
 				}
 
 				// This is where new library trait implementations can be added
-				$crate::__impl_external_bitflags! {
+				::__impl_external_bitflags! {
 					InternalBitFlags: $T, $BitFlags {
 						$(
 							$(#[$inner $($args)*])*
@@ -141,15 +141,15 @@ pub mod __
 					}
 				}
 
-				$crate::__impl_public_bitflags_forward! {
+				::__impl_public_bitflags_forward! {
 					$BitFlags: $T, InternalBitFlags
 				}
 
-				$crate::__impl_public_bitflags_ops! {
+				::__impl_public_bitflags_ops! {
 					$BitFlags
 				}
 
-				$crate::__impl_public_bitflags_iter! {
+				::__impl_public_bitflags_iter! {
 					$BitFlags: $T, $BitFlags
 				}
 			};
@@ -169,7 +169,7 @@ pub mod __
 
 			$($t:tt)*
 		) => {
-			$crate::__impl_public_bitflags_consts! {
+			::__impl_public_bitflags_consts! {
 				$BitFlags: $T {
 					$(
 						$(#[$inner $($args)*])*
@@ -190,7 +190,7 @@ pub mod __
 				clippy::iter_without_into_iter,
 			)]
 			const _: () = {
-				$crate::__impl_public_bitflags! {
+				::__impl_public_bitflags! {
 					$(#[$outer])*
 					$BitFlags: $T, $BitFlags {
 						$(
@@ -200,11 +200,11 @@ pub mod __
 					}
 				}
 
-				$crate::__impl_public_bitflags_ops! {
+				::__impl_public_bitflags_ops! {
 					$BitFlags
 				}
 
-				$crate::__impl_public_bitflags_iter! {
+				::__impl_public_bitflags_iter! {
 					$BitFlags: $T, $BitFlags
 				}
 			};
@@ -216,12 +216,8 @@ pub mod __
 		() => {};
 	}
 	/// Implement functions on bitflags types.
-	///
-	/// We need to be careful about adding new methods and trait implementations here because they
-	/// could conflict with items added by the end-user.
-	#[macro_export]
-	#[doc(hidden)]
-	macro_rules! __impl_bitflags {
+	#[macro_export] macro_rules! __impl_bitflags
+	{
 		(
 			$(#[$outer:meta])*
 			$PublicBitFlags:ident: $T:ty {
@@ -275,7 +271,7 @@ pub mod __
 				///
 				/// This method will return `None` if any unknown bits are set.
 				#[inline]
-				pub const fn from_bits(bits: $T) -> $crate::__private::core::option::Option<Self> {
+				pub const fn from_bits(bits: $T) -> ::option::Option<Self> {
 					let $from_bits0 = bits;
 					$from_bits
 				}
@@ -299,7 +295,7 @@ pub mod __
 				/// This method will return `None` if `name` is empty or doesn't
 				/// correspond to any named flag.
 				#[inline]
-				pub fn from_name(name: &str) -> $crate::__private::core::option::Option<Self> {
+				pub fn from_name(name: &str) -> ::option::Option<Self> {
 					let $from_name0 = name;
 					$from_name
 				}
@@ -421,24 +417,15 @@ pub mod __
 	}
 	/// A macro that processed the input to `bitflags!` and shuffles attributes around
 	/// based on whether or not they're "expression-safe".
-	///
-	/// This macro is a token-tree muncher that works on 2 levels:
-	///
-	/// For each attribute, we explicitly match on its identifier, like `cfg` to determine
-	/// whether or not it should be considered expression-safe.
-	///
-	/// If you find yourself with an attribute that should be considered expression-safe
-	/// and isn't, it can be added here.
-	#[macro_export]
-	#[doc(hidden)]
-	macro_rules! __bitflags_expr_safe_attrs {
+	#[macro_export] macro_rules! __bitflags_expr_safe_attrs
+	{
 		// Entrypoint: Move all flags and all attributes into `unprocessed` lists
 		// where they'll be munched one-at-a-time
 		(
 			$(#[$inner:ident $($args:tt)*])*
 			{ $e:expr }
 		) => {
-			$crate::__bitflags_expr_safe_attrs! {
+			::__bitflags_expr_safe_attrs! {
 				expr: { $e },
 				attrs: {
 					// All attributes start here
@@ -463,7 +450,7 @@ pub mod __
 				processed: [$($expr:tt)*],
 			},
 		) => {
-			$crate::__bitflags_expr_safe_attrs! {
+			::__bitflags_expr_safe_attrs! {
 				expr: { $e },
 				attrs: {
 					unprocessed: [
@@ -490,7 +477,7 @@ pub mod __
 				processed: [$($expr:tt)*],
 			},
 		) => {
-			$crate::__bitflags_expr_safe_attrs! {
+			::__bitflags_expr_safe_attrs! {
 				expr: { $e },
 					attrs: {
 					unprocessed: [
@@ -516,9 +503,8 @@ pub mod __
 		}
 	}
 	/// Implement a flag, which may be a wildcard `_`.
-	#[macro_export]
-	#[doc(hidden)]
-	macro_rules! __bitflags_flag {
+	#[macro_export] macro_rules! __bitflags_flag
+	{
 		(
 			{
 				name: _,
@@ -538,6 +524,717 @@ pub mod __
 			$($named)*
 		};
 	}
+	/// Implements traits from external libraries for the internal bitflags type.
+	#[macro_export] macro_rules! __impl_external_bitflags
+	{
+		(
+			$InternalBitFlags:ident: $T:ty, $PublicBitFlags:ident
+			{
+				$(
+					$(#[$inner:ident $($args:tt)*])*
+					const $Flag:tt;
+				)*
+			}
+		) =>
+		{
+			::__impl_external_bitflags_serde!
+			{
+				$InternalBitFlags: $T, $PublicBitFlags
+				{
+					$(
+						$(#[$inner $($args)*])*
+						const $Flag;
+					)*
+				}
+			}
+
+			::__impl_external_bitflags_arbitrary!
+			{
+				$InternalBitFlags: $T, $PublicBitFlags
+				{
+					$(
+						$(#[$inner $($args)*])*
+						const $Flag;
+					)*
+				}
+			}
+
+			::__impl_external_bitflags_bytemuck!
+			{
+				$InternalBitFlags: $T, $PublicBitFlags
+				{
+					$(
+						$(#[$inner $($args)*])*
+						const $Flag;
+					)*
+				}
+			}
+		};
+	}
+	/// Declare the `bitflags`-facing bitflags struct.
+	#[macro_export] macro_rules! __declare_internal_bitflags
+	{
+		(
+			$vis:vis struct $InternalBitFlags:ident: $T:ty
+		) =>
+		{
+			#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+			#[repr(transparent)]
+			$vis struct $InternalBitFlags($T);
+		};
+	}
+	/// Implement functions on the private (bitflags-facing) bitflags type.
+	#[macro_export] macro_rules! __impl_internal_bitflags
+	{
+		(
+			$InternalBitFlags:ident: $T:ty, $PublicBitFlags:ident
+			{
+				$(
+					$(#[$inner:ident $($args:tt)*])*
+					const $Flag:tt = $value:expr;
+				)*
+			}
+		) =>
+		{
+			impl ::__private::PublicFlags for $PublicBitFlags
+			{
+				type Primitive = $T;
+				type Internal = $InternalBitFlags;
+			}
+
+			impl ::default::Default for $InternalBitFlags
+			{
+				#[inline] fn default() -> Self { $InternalBitFlags::empty() }
+			}
+
+			impl ::fmt::Debug for $InternalBitFlags
+			{
+				fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> fmt::Result
+				{
+					if self.is_empty() { ::write!(f, "{:#x}", <$T as ::parsers::bitflags::Bits>::EMPTY) }
+					else { ::fmt::Display::fmt(self, f) }
+				}
+			}
+
+			impl ::fmt::Display for $InternalBitFlags
+			{
+				fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> ::fmt::Result
+				{
+					::parsers::bitflags::to_writer(&$PublicBitFlags(*self), f)
+				}
+			}
+
+			impl ::str::FromStr for $InternalBitFlags
+			{
+				type Err = ::parsers::bitflags::ParseError;
+
+				fn from_str(s: &str) -> ::result::Result<Self, Self::Err>
+				{
+					::parsers::bitflags::from_str::<$PublicBitFlags>(s).map(|flags| flags.0)
+				}
+			}
+
+			impl ::convert::AsRef<$T> for $InternalBitFlags
+			{
+				fn as_ref(&self) -> &$T { &self.0 }
+			}
+
+			impl ::convert::From<$T> for $InternalBitFlags
+			{
+				fn from(bits: $T) -> Self
+				{
+					Self::from_bits_retain(bits)
+				}
+			}
+			
+			::__impl_public_bitflags!
+			{
+				$InternalBitFlags: $T, $PublicBitFlags
+				{
+					$(
+						$(#[$inner $($args)*])*
+						const $Flag = $value;
+					)*
+				}
+			}
+
+			::__impl_public_bitflags_ops!
+			{
+				$InternalBitFlags
+			}
+
+			::__impl_public_bitflags_iter!
+			{
+				$InternalBitFlags: $T, $PublicBitFlags
+			}
+
+			impl $InternalBitFlags
+			{
+				/// Returns a mutable reference to the raw value of the flags currently stored.
+				#[inline] pub fn bits_mut(&mut self) -> &mut $T { &mut self.0 }
+			}
+		};
+	}
+	/// Declare the user-facing bitflags struct.
+	#[macro_export] macro_rules! __declare_public_bitflags
+	{
+		(
+			$(#[$outer:meta])*
+			$vis:vis struct $PublicBitFlags:ident
+		) => {
+			$(#[$outer])*
+			$vis struct $PublicBitFlags(<$PublicBitFlags as $crate::__private::PublicFlags>::Internal);
+		};
+	}
+	/// Implement functions on the public (user-facing) bitflags type.
+	#[macro_export] macro_rules! __impl_public_bitflags_forward
+	{
+		(
+			$(#[$outer:meta])*
+			$PublicBitFlags:ident: $T:ty, $InternalBitFlags:ident
+		) => {
+			$crate::__impl_bitflags!
+			{
+				$(#[$outer])*
+				$PublicBitFlags: $T {
+					fn empty() {
+						Self($InternalBitFlags::empty())
+					}
+
+					fn all() {
+						Self($InternalBitFlags::all())
+					}
+
+					fn bits(f) {
+						f.0.bits()
+					}
+
+					fn from_bits(bits) {
+						match $InternalBitFlags::from_bits(bits) {
+							::option::Option::Some(bits) => ::option::Option::Some(Self(bits)),
+							::option::Option::None => ::option::Option::None,
+						}
+					}
+
+					fn from_bits_truncate(bits) {
+						Self($InternalBitFlags::from_bits_truncate(bits))
+					}
+
+					fn from_bits_retain(bits) {
+						Self($InternalBitFlags::from_bits_retain(bits))
+					}
+
+					fn from_name(name) {
+						match $InternalBitFlags::from_name(name) {
+							::option::Option::Some(bits) => ::option::Option::Some(Self(bits)),
+							::option::Option::None => ::option::Option::None,
+						}
+					}
+
+					fn is_empty(f) {
+						f.0.is_empty()
+					}
+
+					fn is_all(f) {
+						f.0.is_all()
+					}
+
+					fn intersects(f, other) {
+						f.0.intersects(other.0)
+					}
+
+					fn contains(f, other) {
+						f.0.contains(other.0)
+					}
+
+					fn insert(f, other) {
+						f.0.insert(other.0)
+					}
+
+					fn remove(f, other) {
+						f.0.remove(other.0)
+					}
+
+					fn toggle(f, other) {
+						f.0.toggle(other.0)
+					}
+
+					fn set(f, other, value) {
+						f.0.set(other.0, value)
+					}
+
+					fn intersection(f, other) {
+						Self(f.0.intersection(other.0))
+					}
+
+					fn union(f, other) {
+						Self(f.0.union(other.0))
+					}
+
+					fn difference(f, other) {
+						Self(f.0.difference(other.0))
+					}
+
+					fn symmetric_difference(f, other) {
+						Self(f.0.symmetric_difference(other.0))
+					}
+
+					fn complement(f) {
+						Self(f.0.complement())
+					}
+				}
+			}
+		};
+	}
+	/// Implement functions on the public (user-facing) bitflags type.
+	#[macro_export] macro_rules! __impl_public_bitflags
+	{
+		(
+			$(#[$outer:meta])*
+			$BitFlags:ident: $T:ty, $PublicBitFlags:ident {
+				$(
+					$(#[$inner:ident $($args:tt)*])*
+					const $Flag:tt = $value:expr;
+				)*
+			}
+		) => {
+			$crate::__impl_bitflags! {
+				$(#[$outer])*
+				$BitFlags: $T {
+					fn empty() {
+						Self(<$T as ::parsers::bitflags::Bits>::EMPTY)
+					}
+
+					fn all() {
+						let mut truncated = <$T as ::parsers::bitflags::Bits>::EMPTY;
+						let mut i = 0;
+
+						$(
+							$crate::__bitflags_expr_safe_attrs!(
+								$(#[$inner $($args)*])*
+								{{
+									let flag = <$PublicBitFlags as $crate::Flags>::FLAGS[i].value().bits();
+
+									truncated = truncated | flag;
+									i += 1;
+								}}
+							);
+						)*
+
+						let _ = i;
+						Self::from_bits_retain(truncated)
+					}
+
+					fn bits(f) {
+						f.0
+					}
+
+					fn from_bits(bits) {
+						let truncated = Self::from_bits_truncate(bits).0;
+
+						if truncated == bits {
+							::option::Option::Some(Self(bits))
+						} else {
+							::option::Option::None
+						}
+					}
+
+					fn from_bits_truncate(bits) {
+						Self(bits & Self::all().bits())
+					}
+
+					fn from_bits_retain(bits) {
+						Self(bits)
+					}
+
+					fn from_name(name) {
+						$(
+							$crate::__bitflags_flag!({
+								name: $Flag,
+								named: {
+									$crate::__bitflags_expr_safe_attrs!(
+										$(#[$inner $($args)*])*
+										{
+											if name == ::stringify!($Flag) {
+												return ::option::Option::Some(Self($PublicBitFlags::$Flag.bits()));
+											}
+										}
+									);
+								},
+								unnamed: {},
+							});
+						)*
+
+						let _ = name;
+						::option::Option::None
+					}
+
+					fn is_empty(f) {
+						f.bits() == <$T as ::Bits>::EMPTY
+					}
+
+					fn is_all(f) {
+						// NOTE: We check against `Self::all` here, not `Self::Bits::ALL`
+						// because the set of all flags may not use all bits
+						Self::all().bits() | f.bits() == f.bits()
+					}
+
+					fn intersects(f, other) {
+						f.bits() & other.bits() != <$T as ::Bits>::EMPTY
+					}
+
+					fn contains(f, other) {
+						f.bits() & other.bits() == other.bits()
+					}
+
+					fn insert(f, other) {
+						*f = Self::from_bits_retain(f.bits()).union(other);
+					}
+
+					fn remove(f, other) {
+						*f = Self::from_bits_retain(f.bits()).difference(other);
+					}
+
+					fn toggle(f, other) {
+						*f = Self::from_bits_retain(f.bits()).symmetric_difference(other);
+					}
+
+					fn set(f, other, value) {
+						if value {
+							f.insert(other);
+						} else {
+							f.remove(other);
+						}
+					}
+
+					fn intersection(f, other) {
+						Self::from_bits_retain(f.bits() & other.bits())
+					}
+
+					fn union(f, other) {
+						Self::from_bits_retain(f.bits() | other.bits())
+					}
+
+					fn difference(f, other) {
+						Self::from_bits_retain(f.bits() & !other.bits())
+					}
+
+					fn symmetric_difference(f, other) {
+						Self::from_bits_retain(f.bits() ^ other.bits())
+					}
+
+					fn complement(f) {
+						Self::from_bits_truncate(!f.bits())
+					}
+				}
+			}
+		};
+	}
+	/// Implement iterators on the public (user-facing) bitflags type.
+	#[macro_export] macro_rules! __impl_public_bitflags_iter
+	{
+		(
+			$(#[$outer:meta])*
+			$BitFlags:ident: $T:ty, $PublicBitFlags:ident
+		) => {
+			$(#[$outer])*
+			impl $BitFlags {
+				/// Yield a set of contained flags values.
+				///
+				/// Each yielded flags value will correspond to a defined named flag. Any unknown bits
+				/// will be yielded together as a final flags value.
+				#[inline]
+				pub const fn iter(&self) -> $crate::iter::Iter<$PublicBitFlags> {
+					$crate::iter::Iter::__private_const_new(
+						<$PublicBitFlags as $crate::Flags>::FLAGS,
+						$PublicBitFlags::from_bits_retain(self.bits()),
+						$PublicBitFlags::from_bits_retain(self.bits()),
+					)
+				}
+
+				/// Yield a set of contained named flags values.
+				///
+				/// This method is like [`iter`](#method.iter), except only yields bits in contained named flags.
+				/// Any unknown bits, or bits not corresponding to a contained flag will not be yielded.
+				#[inline]
+				pub const fn iter_names(&self) -> $crate::iter::IterNames<$PublicBitFlags> {
+					$crate::iter::IterNames::__private_const_new(
+						<$PublicBitFlags as $crate::Flags>::FLAGS,
+						$PublicBitFlags::from_bits_retain(self.bits()),
+						$PublicBitFlags::from_bits_retain(self.bits()),
+					)
+				}
+			}
+
+			$(#[$outer:meta])*
+			impl ::iter::IntoIterator for $BitFlags {
+				type Item = $PublicBitFlags;
+				type IntoIter = $crate::iter::Iter<$PublicBitFlags>;
+
+				fn into_iter(self) -> Self::IntoIter {
+					self.iter()
+				}
+			}
+		};
+	}
+	/// Implement traits on the public (user-facing) bitflags type.
+	#[macro_export] macro_rules! __impl_public_bitflags_ops
+	{
+		(
+			$(#[$outer:meta])*
+			$PublicBitFlags:ident
+		) => {
+
+			$(#[$outer])*
+			impl ::fmt::Binary for $PublicBitFlags {
+				fn fmt(
+					&self,
+					f: &mut ::fmt::Formatter,
+				) -> ::fmt::Result {
+					let inner = self.0;
+					::fmt::Binary::fmt(&inner, f)
+				}
+			}
+
+			$(#[$outer])*
+			impl ::fmt::Octal for $PublicBitFlags {
+				fn fmt(
+					&self,
+					f: &mut ::fmt::Formatter,
+				) -> ::fmt::Result {
+					let inner = self.0;
+					::fmt::Octal::fmt(&inner, f)
+				}
+			}
+
+			$(#[$outer])*
+			impl ::fmt::LowerHex for $PublicBitFlags {
+				fn fmt(
+					&self,
+					f: &mut ::fmt::Formatter,
+				) -> ::fmt::Result {
+					let inner = self.0;
+					::fmt::LowerHex::fmt(&inner, f)
+				}
+			}
+
+			$(#[$outer])*
+			impl ::fmt::UpperHex for $PublicBitFlags {
+				fn fmt(
+					&self,
+					f: &mut ::fmt::Formatter,
+				) -> ::fmt::Result {
+					let inner = self.0;
+					::fmt::UpperHex::fmt(&inner, f)
+				}
+			}
+
+			$(#[$outer])*
+			impl ::ops::BitOr for $PublicBitFlags {
+				type Output = Self;
+
+				/// The bitwise or (`|`) of the bits in two flags values.
+				#[inline]
+				fn bitor(self, other: $PublicBitFlags) -> Self {
+					self.union(other)
+				}
+			}
+
+			$(#[$outer])*
+			impl ::ops::BitOrAssign for $PublicBitFlags {
+				/// The bitwise or (`|`) of the bits in two flags values.
+				#[inline]
+				fn bitor_assign(&mut self, other: Self) {
+					self.insert(other);
+				}
+			}
+
+			$(#[$outer])*
+			impl ::ops::BitXor for $PublicBitFlags {
+				type Output = Self;
+
+				/// The bitwise exclusive-or (`^`) of the bits in two flags values.
+				#[inline]
+				fn bitxor(self, other: Self) -> Self {
+					self.symmetric_difference(other)
+				}
+			}
+
+			$(#[$outer])*
+			impl ::ops::BitXorAssign for $PublicBitFlags {
+				/// The bitwise exclusive-or (`^`) of the bits in two flags values.
+				#[inline]
+				fn bitxor_assign(&mut self, other: Self) {
+					self.toggle(other);
+				}
+			}
+
+			$(#[$outer])*
+			impl ::ops::BitAnd for $PublicBitFlags {
+				type Output = Self;
+
+				/// The bitwise and (`&`) of the bits in two flags values.
+				#[inline]
+				fn bitand(self, other: Self) -> Self {
+					self.intersection(other)
+				}
+			}
+
+			$(#[$outer])*
+			impl ::ops::BitAndAssign for $PublicBitFlags {
+				/// The bitwise and (`&`) of the bits in two flags values.
+				#[inline]
+				fn bitand_assign(&mut self, other: Self) {
+					*self = Self::from_bits_retain(self.bits()).intersection(other);
+				}
+			}
+
+			$(#[$outer])*
+			impl ::ops::Sub for $PublicBitFlags {
+				type Output = Self;
+
+				/// The intersection of a source flags value with the complement of a target flags value (`&!`).
+				///
+				/// This method is not equivalent to `self & !other` when `other` has unknown bits set.
+				/// `difference` won't truncate `other`, but the `!` operator will.
+				#[inline]
+				fn sub(self, other: Self) -> Self {
+					self.difference(other)
+				}
+			}
+
+			$(#[$outer])*
+			impl ::ops::SubAssign for $PublicBitFlags {
+				/// The intersection of a source flags value with the complement of a target flags value (`&!`).
+				///
+				/// This method is not equivalent to `self & !other` when `other` has unknown bits set.
+				/// `difference` won't truncate `other`, but the `!` operator will.
+				#[inline]
+				fn sub_assign(&mut self, other: Self) {
+					self.remove(other);
+				}
+			}
+
+			$(#[$outer])*
+			impl ::ops::Not for $PublicBitFlags {
+				type Output = Self;
+
+				/// The bitwise negation (`!`) of the bits in a flags value, truncating the result.
+				#[inline]
+				fn not(self) -> Self {
+					self.complement()
+				}
+			}
+
+			$(#[$outer])*
+			impl ::iter::Extend<$PublicBitFlags> for $PublicBitFlags {
+				/// The bitwise or (`|`) of the bits in each flags value.
+				fn extend<T: ::iter::IntoIterator<Item = Self>>(
+					&mut self,
+					iterator: T,
+				) {
+					for item in iterator {
+						self.insert(item)
+					}
+				}
+			}
+
+			$(#[$outer])*
+			impl ::iter::FromIterator<$PublicBitFlags> for $PublicBitFlags {
+				/// The bitwise or (`|`) of the bits in each flags value.
+				fn from_iter<T: ::iter::IntoIterator<Item = Self>>(
+					iterator: T,
+				) -> Self {
+					use ::iter::Extend;
+
+					let mut result = Self::empty();
+					result.extend(iterator);
+					result
+				}
+			}
+		};
+	}
+	/// Implement constants on the public (user-facing) bitflags type.
+	#[macro_export] macro_rules! __impl_public_bitflags_consts
+	{
+		(
+			$(#[$outer:meta])*
+			$PublicBitFlags:ident: $T:ty {
+				$(
+					$(#[$inner:ident $($args:tt)*])*
+					const $Flag:tt = $value:expr;
+				)*
+			}
+		) => {
+			$(#[$outer])*
+			impl $PublicBitFlags {
+				$(
+					$crate::__bitflags_flag!({
+						name: $Flag,
+						named: {
+							$(#[$inner $($args)*])*
+							#[allow(
+								deprecated,
+								non_upper_case_globals,
+							)]
+							pub const $Flag: Self = Self::from_bits_retain($value);
+						},
+						unnamed: {},
+					});
+				)*
+			}
+
+			$(#[$outer])*
+			impl $crate::Flags for $PublicBitFlags {
+				const FLAGS: &'static [$crate::Flag<$PublicBitFlags>] = &[
+					$(
+						$crate::__bitflags_flag!({
+							name: $Flag,
+							named: {
+								$crate::__bitflags_expr_safe_attrs!(
+									$(#[$inner $($args)*])*
+									{
+										#[allow(
+											deprecated,
+											non_upper_case_globals,
+										)]
+										$crate::Flag::new(::stringify!($Flag), $PublicBitFlags::$Flag)
+									}
+								)
+							},
+							unnamed: {
+								$crate::__bitflags_expr_safe_attrs!(
+									$(#[$inner $($args)*])*
+									{
+										#[allow(
+											deprecated,
+											non_upper_case_globals,
+										)]
+										$crate::Flag::new("", $PublicBitFlags::from_bits_retain($value))
+									}
+								)
+							},
+						}),
+					)*
+				];
+
+				type Bits = $T;
+
+				fn bits(&self) -> $T {
+					$PublicBitFlags::bits(self)
+				}
+
+				fn from_bits_retain(bits: $T) -> $PublicBitFlags {
+					$PublicBitFlags::from_bits_retain(bits)
+				}
+			}
+		};
+	}
+}
+
+pub mod alloc
+{
+	pub use std::alloc::{ * };
 }
 
 pub mod borrow
@@ -553,6 +1250,16 @@ pub mod boxed
 pub mod cell
 {
 	pub use std::cell::{ * };
+}
+
+pub mod cmp
+{
+	pub use std::cmp::{ * };
+}
+
+pub mod convert
+{
+	pub use std::convert::{ * };
 }
 
 pub mod default
@@ -581,26 +1288,13 @@ pub mod fallible
 		"Fallible" iterators. */
 		use ::
 		{
+            boxed::{ Box },
+            cmp::{ self, Ordering },
+            convert::{ Infallible },
+            marker::{ PhantomData },
 			*,
 		};
 		/*
-		#![doc(html_root_url = "https://docs.rs/fallible-iterator/0.2")]
-		#![warn(missing_docs)]
-		#![no_std]
-
-		use core::cmp::{self, Ordering};
-		use core::convert::Infallible;
-		use core::iter;
-		use core::marker::PhantomData;
-
-		#[cfg(feature = "alloc")]
-		extern crate alloc;
-
-		#[cfg(feature = "alloc")]
-		use alloc::boxed::Box;
-
-		#[cfg(all(test, feature = "alloc"))]
-		mod test;
 		*/	
 		pub mod streams
 		{
@@ -2003,7 +2697,6 @@ pub mod fallible
 			}
 		}
 
-		#[cfg(feature = "alloc")]
 		impl<I: FallibleIterator + ?Sized> FallibleIterator for Box<I> {
 			type Item = I::Item;
 			type Error = I::Error;
@@ -2021,7 +2714,6 @@ pub mod fallible
 			}
 		}
 
-		#[cfg(feature = "alloc")]
 		impl<I: DoubleEndedFallibleIterator + ?Sized> DoubleEndedFallibleIterator for Box<I> {
 			#[inline] fn next_back(&mut self) -> Result<Option<I::Item>, I::Error> {
 				(**self).next_back()
@@ -2393,7 +3085,8 @@ pub mod fallible
 			type Item = T;
 			type Error = Infallible;
 
-			#[inline] fn next(&mut self) -> Result<Option<T>, Self::Error> {
+			#[inline] fn next(&mut self) -> Result<Option<T>, Self::Error>
+            {
 				Ok(self.0.next())
 			}
 
@@ -2420,7 +3113,8 @@ pub mod fallible
 		impl<T, I> DoubleEndedFallibleIterator for IntoFallible<I> where
 			I: DoubleEndedIterator<Item = T>,
 		{
-			#[inline] fn next_back(&mut self) -> Result<Option<T>, Infallible> {
+			#[inline] fn next_back(&mut self) -> Result<Option<T>, Infallible>
+            {
 				Ok(self.0.next_back())
 			}
 
@@ -3519,7 +4213,8 @@ pub mod fallible
 			type Item = T;
 			type Error = E;
 
-			#[inline] fn next(&mut self) -> Result<Option<T>, E> {
+			#[inline] fn next(&mut self) -> Result<Option<T>, E>
+            {
 				Ok(None)
 			}
 
@@ -3543,7 +4238,8 @@ pub mod fallible
 			type Item = T;
 			type Error = E;
 
-			#[inline] fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+			#[inline] fn next(&mut self) -> Result<Option<Self::Item>, Self::Error>
+            {
 				Ok(self.0.take())
 			}
 
@@ -3589,7 +4285,8 @@ pub mod fallible
 			type Item = T;
 			type Error = E;
 
-			#[inline] fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+			#[inline] fn next(&mut self) -> Result<Option<Self::Item>, Self::Error>
+            {
 				Ok(Some(self.0.clone()))
 			}
 
@@ -3632,9 +4329,145 @@ pub mod fmt
 	pub use std::fmt::{ * };
 }
 
+pub mod iter
+{
+	pub use std::iter::{ * };	
+	/**
+	An iterator over flags values. */
+	pub struct Iter<B: 'static>
+	{
+		inner: IterNames<B>,
+		done: bool,
+	}
+
+	impl<B: Flags> Iter<B>
+	{
+		pub fn new(flags: &B) -> Self
+		{
+			Iter
+			{
+				inner: IterNames::new(flags),
+				done: false,
+			}
+		}
+	}
+
+	impl<B: 'static> Iter<B>
+	{
+		pub const fn __private_const_new(flags: &'static [Flag<B>], source: B, remaining: B) -> Self
+		{
+			Iter
+			{
+				inner: IterNames::__private_const_new(flags, source, remaining),
+				done: false,
+			}
+		}
+	}
+
+	impl<B: Flags> Iterator for Iter<B>
+	{
+		type Item = B;
+
+		fn next(&mut self) -> Option<Self::Item>
+		{
+			match self.inner.next()
+			{
+				Some((_, flag)) => Some(flag),
+				None if !self.done =>
+				{
+					self.done = true;
+					
+					if !self.inner.remaining().is_empty() { Some(B::from_bits_retain(self.inner.remaining.bits())) }
+					else { None }
+				}
+				
+				None => None,
+			}
+		}
+	}
+	/**
+	An iterator over flags values. */
+	pub struct IterNames<B: 'static>
+	{
+		flags: &'static [Flag<B>],
+		idx: usize,
+		source: B,
+		remaining: B,
+	}
+
+	impl<B: Flags> IterNames<B>
+	{
+		pub fn new(flags: &B) -> Self
+		{
+			IterNames
+			{
+				flags: B::FLAGS,
+				idx: 0,
+				remaining: B::from_bits_retain(flags.bits()),
+				source: B::from_bits_retain(flags.bits()),
+			}
+		}
+	}
+
+	impl<B: 'static> IterNames<B>
+	{
+		pub const fn __private_const_new(flags: &'static [Flag<B>], source: B, remaining: B) -> Self
+		{
+			IterNames
+			{
+				flags,
+				idx: 0,
+				remaining,
+				source,
+			}
+		}
+		/// Get a flags value of any remaining bits that haven't been yielded yet.
+		pub fn remaining(&self) -> &B { &self.remaining }
+	}
+
+	impl<B: Flags> Iterator for IterNames<B>
+	{
+		type Item = (&'static str, B);
+
+		fn next(&mut self) -> Option<Self::Item>
+		{
+			while let Some(flag) = self.flags.get(self.idx)
+			{
+				if self.remaining.is_empty() { return None; }
+
+				self.idx += 1;
+				
+				if flag.name().is_empty() { continue; }
+
+				let bits = flag.value().bits();
+				
+				if self.source.contains(B::from_bits_retain(bits)) 
+				&& self.remaining.intersects(B::from_bits_retain(bits))
+				{
+					self.remaining.remove(B::from_bits_retain(bits));
+					return Some((flag.name(), B::from_bits_retain(bits)));
+				}
+			}
+
+			None
+		}
+	}
+
+}
+
+pub mod marker
+{
+	pub use std::marker::{ * };
+}
+
 pub mod mem
 {
 	pub use std::mem::{ * };
+}
+
+pub mod ops
+{
+	pub use std::ops::{ * };
 }
 
 pub mod option
@@ -3652,9 +4485,550 @@ pub mod panic
 	pub use std::panic::{ * };
 }
 
+pub mod parsers
+{
+	/*!
+	*/
+	use ::
+	{
+		*,
+	};
+	/*
+	*/
+	pub mod bitflags
+	{
+		/*!
+		Parsing flags from text.*/
+		use ::
+		{
+			fmt::{self, Write},
+			ops::{BitAnd, BitOr, BitXor, Not},
+			*,
+		};
+		/*
+		use crate::{Bits, Flags};
+		*/
+		macro_rules! impl_bits
+		{
+			($($u:ty, $i:ty,)*) => {
+				$(
+					impl Bits for $u {
+						const EMPTY: $u = 0;
+						const ALL: $u = <$u>::MAX;
+					}
+
+					impl Bits for $i {
+						const EMPTY: $i = 0;
+						const ALL: $i = <$u>::MAX as $i;
+					}
+
+					impl ParseHex for $u {
+						fn parse_hex(input: &str) -> Result<Self, ParseError> {
+							<$u>::from_str_radix(input, 16).map_err(|_| ParseError::invalid_hex_flag(input))
+						}
+					}
+
+					impl ParseHex for $i {
+						fn parse_hex(input: &str) -> Result<Self, ParseError> {
+							<$i>::from_str_radix(input, 16).map_err(|_| ParseError::invalid_hex_flag(input))
+						}
+					}
+
+					impl WriteHex for $u {
+						fn write_hex<W: fmt::Write>(&self, mut writer: W) -> fmt::Result {
+							write!(writer, "{:x}", self)
+						}
+					}
+
+					impl WriteHex for $i {
+						fn write_hex<W: fmt::Write>(&self, mut writer: W) -> fmt::Result {
+							write!(writer, "{:x}", self)
+						}
+					}
+
+					impl Primitive for $i {}
+					impl Primitive for $u {}
+				)*
+			}
+		}
+
+		/**
+		Write a flags value as text. */
+		pub fn to_writer<B: Flags>(flags: &B, mut writer: impl Write) -> Result<(), fmt::Error> where
+		B::Bits: WriteHex
+		{
+			let mut first = true;
+			let mut iter = flags.iter_names();
+			for (name, _) in &mut iter
+			{
+				if !first { writer.write_str(" | ")?; }
+				first = false;
+				writer.write_str(name)?;
+			}
+			
+			let remaining = iter.remaining().bits();
+			if remaining != B::Bits::EMPTY
+			{
+				if !first { writer.write_str(" | ")?; }
+
+				writer.write_str("0x")?;
+				remaining.write_hex(writer)?;
+			}
+
+			fmt::Result::Ok(())
+		}
+		/**
+		Parse a flags value from text. */
+		pub fn from_str<B: Flags>(input: &str) -> Result<B, ParseError> where
+		B::Bits: ParseHex,
+		{
+			let mut parsed_flags = B::empty();
+			
+			if input.trim().is_empty() { return Ok(parsed_flags); }
+
+			for flag in input.split('|')
+			{
+				let flag = flag.trim();
+				
+				if flag.is_empty() { return Err(ParseError::empty_flag()); }
+				
+				let parsed_flag = if let Some(flag) = flag.strip_prefix("0x")
+				{
+					let bits = <B::Bits>::parse_hex(flag).map_err(|_| ParseError::invalid_hex_flag(flag))?;
+					B::from_bits_retain(bits)
+				}
+				
+				else { B::from_name(flag).ok_or_else(|| ParseError::invalid_named_flag(flag))? };
+
+				parsed_flags.insert(parsed_flag);
+			}
+
+			Ok(parsed_flags)
+		}
+		/**
+		Write a flags value as text, ignoring any unknown bits. */
+		pub fn to_writer_truncate<B: Flags>(flags: &B, writer: impl Write) -> Result<(), fmt::Error> where
+		B::Bits: WriteHex,
+		{ to_writer(&B::from_bits_truncate(flags.bits()), writer) }
+		/**
+		Parse a flags value from text. */
+		pub fn from_str_truncate<B: Flags>(input: &str) -> Result<B, ParseError> where
+		B::Bits: ParseHex,
+		{ Ok(B::from_bits_truncate(from_str::<B>(input)?.bits())) }
+		/**
+		Write only the contained, defined, named flags in a flags value as text. */
+		pub fn to_writer_strict<B: Flags>(flags: &B, mut writer: impl Write) -> Result<(), fmt::Error>
+		{
+			let mut first = true;
+			let mut iter = flags.iter_names();
+			for (name, _) in &mut iter
+			{
+				if !first { writer.write_str(" | ")?; }
+
+				first = false;
+				writer.write_str(name)?;
+			}
+
+			fmt::Result::Ok(())
+		}
+		/**
+		Parse a flags value from text. */
+		pub fn from_str_strict<B: Flags>(input: &str) -> Result<B, ParseError>
+		{
+			let mut parsed_flags = B::empty();
+			
+			if input.trim().is_empty() { return Ok(parsed_flags); }
+
+			for flag in input.split('|')
+			{
+				let flag = flag.trim();
+				
+				if flag.is_empty() { return Err(ParseError::empty_flag()); }
+				
+				if flag.starts_with("0x")
+				{ return Err(ParseError::invalid_hex_flag("unsupported hex flag value")); }
+
+				let parsed_flag = B::from_name(flag).ok_or_else(|| ParseError::invalid_named_flag(flag))?;
+
+				parsed_flags.insert(parsed_flag);
+			}
+
+			Ok(parsed_flags)
+		}
+		/**
+		Encode a value as a hex string. */
+		pub trait WriteHex
+		{
+			/// Write the value as hex.
+			fn write_hex<W: fmt::Write>(&self, writer: W) -> fmt::Result;
+		}
+		/**
+		Parse a value from a hex string. */
+		pub trait ParseHex
+		{
+			/// Parse the value from hex.
+			fn parse_hex(input: &str) -> Result<Self, ParseError> where Self: Sized;
+		}
+		/// An error encountered while parsing flags from text.
+		#[derive(Debug)]
+		pub struct ParseError(ParseErrorKind);
+
+		#[derive(Debug)] enum ParseErrorKind
+		{
+			EmptyFlag,
+			InvalidNamedFlag
+			{
+				got: String,
+			},
+			InvalidHexFlag
+			{
+				got: String,
+			},
+		}
+
+		impl ParseError
+		{
+			/// An invalid hex flag was encountered.
+			pub fn invalid_hex_flag(flag: impl fmt::Display) -> Self
+			{
+				let _flag = flag;
+
+				let got = _flag.to_string();
+
+				ParseError(ParseErrorKind::InvalidHexFlag { got })
+			}
+			/// A named flag that doesn't correspond to any on the flags type was encountered.
+			pub fn invalid_named_flag(flag: impl fmt::Display) -> Self
+			{
+				let _flag = flag;
+
+				let got = _flag.to_string();
+
+				ParseError(ParseErrorKind::InvalidNamedFlag { got })
+			}
+			/// A hex or named flag wasn't found between separators.
+			pub const fn empty_flag() -> Self { ParseError(ParseErrorKind::EmptyFlag) }
+		}
+
+		impl fmt::Display for ParseError
+		{
+			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+			{
+				match &self.0
+				{
+					ParseErrorKind::InvalidNamedFlag { got } =>
+					{
+						let _got = got;
+						write!(f, "unrecognized named flag")?;
+						write!(f, " `{}`", _got)?;
+					}
+					
+					ParseErrorKind::InvalidHexFlag { got } =>
+					{
+						let _got = got;
+						write!(f, "invalid hex flag")?;
+						write!(f, " `{}`", _got)?;
+					}
+					
+					ParseErrorKind::EmptyFlag => { write!(f, "encountered empty flag")?; }
+				}
+
+				Ok(())
+			}
+		}
+
+		impl ::error::Error for ParseError {}
+		/**
+		A defined flags value that may be named or unnamed. */
+		#[derive(Debug)]
+		pub struct Flag<B>
+		{
+			name: &'static str,
+			value: B,
+		}
+
+		impl<B> Flag<B>
+		{
+			/**
+			Define a flag. */
+			pub const fn new(name: &'static str, value: B) -> Self { Flag { name, value } }
+			/**
+			Get the name of this flag. */
+			pub const fn name(&self) -> &'static str { self.name }
+			/**
+			Get the flags value of this flag. */
+			pub const fn value(&self) -> &B { &self.value }
+			/**
+			Whether the flag is named. */
+			pub const fn is_named(&self) -> bool { !self.name.is_empty() }
+			/**
+			Whether the flag is unnamed. */
+			pub const fn is_unnamed(&self) -> bool { self.name.is_empty() }
+		}
+		/**
+		A set of defined flags using a bits type as storage. */
+		pub trait Flags: Sized + 'static
+		{
+			/// The set of defined flags.
+			const FLAGS: &'static [Flag<Self>];
+
+			/// The underlying bits type.
+			type Bits: Bits;
+
+			/// Get a flags value with all bits unset.
+			fn empty() -> Self {
+				Self::from_bits_retain(Self::Bits::EMPTY)
+			}
+
+			/// Get a flags value with all known bits set.
+			fn all() -> Self {
+				let mut truncated = Self::Bits::EMPTY;
+
+				for flag in Self::FLAGS.iter() {
+					truncated = truncated | flag.value().bits();
+				}
+
+				Self::from_bits_retain(truncated)
+			}
+
+			/// Get the underlying bits value.
+			///
+			/// The returned value is exactly the bits set in this flags value.
+			fn bits(&self) -> Self::Bits;
+
+			/// Convert from a bits value.
+			///
+			/// This method will return `None` if any unknown bits are set.
+			fn from_bits(bits: Self::Bits) -> Option<Self> {
+				let truncated = Self::from_bits_truncate(bits);
+
+				if truncated.bits() == bits {
+					Some(truncated)
+				} else {
+					None
+				}
+			}
+
+			/// Convert from a bits value, unsetting any unknown bits.
+			fn from_bits_truncate(bits: Self::Bits) -> Self {
+				Self::from_bits_retain(bits & Self::all().bits())
+			}
+
+			/// Convert from a bits value exactly.
+			fn from_bits_retain(bits: Self::Bits) -> Self;
+
+			/// Get a flags value with the bits of a flag with the given name set.
+			///
+			/// This method will return `None` if `name` is empty or doesn't
+			/// correspond to any named flag.
+			fn from_name(name: &str) -> Option<Self> {
+				// Don't parse empty names as empty flags
+				if name.is_empty() {
+					return None;
+				}
+
+				for flag in Self::FLAGS {
+					if flag.name() == name {
+						return Some(Self::from_bits_retain(flag.value().bits()));
+					}
+				}
+
+				None
+			}
+
+			/// Yield a set of contained flags values.
+			///
+			/// Each yielded flags value will correspond to a defined named flag. Any unknown bits
+			/// will be yielded together as a final flags value.
+			fn iter(&self) -> iter::Iter<Self> {
+				iter::Iter::new(self)
+			}
+
+			/// Yield a set of contained named flags values.
+			///
+			/// This method is like [`Flags::iter`], except only yields bits in contained named flags.
+			/// Any unknown bits, or bits not corresponding to a contained flag will not be yielded.
+			fn iter_names(&self) -> iter::IterNames<Self> {
+				iter::IterNames::new(self)
+			}
+
+			/// Whether all bits in this flags value are unset.
+			fn is_empty(&self) -> bool {
+				self.bits() == Self::Bits::EMPTY
+			}
+
+			/// Whether all known bits in this flags value are set.
+			fn is_all(&self) -> bool {
+				// NOTE: We check against `Self::all` here, not `Self::Bits::ALL`
+				// because the set of all flags may not use all bits
+				Self::all().bits() | self.bits() == self.bits()
+			}
+
+			/// Whether any set bits in a source flags value are also set in a target flags value.
+			fn intersects(&self, other: Self) -> bool
+			where
+				Self: Sized,
+			{
+				self.bits() & other.bits() != Self::Bits::EMPTY
+			}
+
+			/// Whether all set bits in a source flags value are also set in a target flags value.
+			fn contains(&self, other: Self) -> bool
+			where
+				Self: Sized,
+			{
+				self.bits() & other.bits() == other.bits()
+			}
+
+			/// The bitwise or (`|`) of the bits in two flags values.
+			fn insert(&mut self, other: Self)
+			where
+				Self: Sized,
+			{
+				*self = Self::from_bits_retain(self.bits()).union(other);
+			}
+
+			/// The intersection of a source flags value with the complement of a target flags value (`&!`).
+			///
+			/// This method is not equivalent to `self & !other` when `other` has unknown bits set.
+			/// `remove` won't truncate `other`, but the `!` operator will.
+			fn remove(&mut self, other: Self)
+			where
+				Self: Sized,
+			{
+				*self = Self::from_bits_retain(self.bits()).difference(other);
+			}
+
+			/// The bitwise exclusive-or (`^`) of the bits in two flags values.
+			fn toggle(&mut self, other: Self)
+			where
+				Self: Sized,
+			{
+				*self = Self::from_bits_retain(self.bits()).symmetric_difference(other);
+			}
+
+			/// Call [`Flags::insert`] when `value` is `true` or [`Flags::remove`] when `value` is `false`.
+			fn set(&mut self, other: Self, value: bool)
+			where
+				Self: Sized,
+			{
+				if value {
+					self.insert(other);
+				} else {
+					self.remove(other);
+				}
+			}
+
+			/// The bitwise and (`&`) of the bits in two flags values.
+			#[must_use]
+			fn intersection(self, other: Self) -> Self {
+				Self::from_bits_retain(self.bits() & other.bits())
+			}
+
+			/// The bitwise or (`|`) of the bits in two flags values.
+			#[must_use]
+			fn union(self, other: Self) -> Self {
+				Self::from_bits_retain(self.bits() | other.bits())
+			}
+
+			/// The intersection of a source flags value with the complement of a target flags value (`&!`).
+			///
+			/// This method is not equivalent to `self & !other` when `other` has unknown bits set.
+			/// `difference` won't truncate `other`, but the `!` operator will.
+			#[must_use]
+			fn difference(self, other: Self) -> Self {
+				Self::from_bits_retain(self.bits() & !other.bits())
+			}
+
+			/// The bitwise exclusive-or (`^`) of the bits in two flags values.
+			#[must_use]
+			fn symmetric_difference(self, other: Self) -> Self {
+				Self::from_bits_retain(self.bits() ^ other.bits())
+			}
+
+			/// The bitwise negation (`!`) of the bits in a flags value, truncating the result.
+			#[must_use]
+			fn complement(self) -> Self {
+				Self::from_bits_truncate(!self.bits())
+			}
+		}
+		/**
+		A bits type that can be used as storage for a flags type. */
+		pub trait Bits:
+		Clone
+		+ Copy
+		+ PartialEq
+		+ BitAnd<Output = Self>
+		+ BitOr<Output = Self>
+		+ BitXor<Output = Self>
+		+ Not<Output = Self>
+		+ Sized
+		+ 'static
+		{
+			/// A value with all bits unset.
+			const EMPTY: Self;
+
+			/// A value with all bits set.
+			const ALL: Self;
+		}
+
+		pub trait Primitive {}
+		
+		impl_bits!
+		{
+			u8, i8,
+			u16, i16,
+			u32, i32,
+			u64, i64,
+			u128, i128,
+			usize, isize,
+		}
+		/// A trait for referencing the `bitflags`-owned internal type without exposing it publicly.
+		pub trait PublicFlags
+		{
+			/// The type of the underlying storage.
+			type Primitive: Primitive;
+
+			/// The type of the internal field on the generated flags type.
+			type Internal;
+		}
+		
+		#[deprecated(note = "use the `Flags` trait instead")]
+		pub trait BitFlags: ImplementedByBitFlagsMacro + Flags
+		{
+			/// An iterator over enabled flags in an instance of the type.
+			type Iter: Iterator<Item = Self>;
+
+			/// An iterator over the raw names and bits for enabled flags in an instance of the type.
+			type IterNames: Iterator<Item = (&'static str, Self)>;
+		}
+		
+		impl<B: Flags> BitFlags for B
+		{
+			type Iter = iter::Iter<Self>;
+			type IterNames = iter::IterNames<Self>;
+		}
+
+		impl<B: Flags> ImplementedByBitFlagsMacro for B {}
+		/// Signals that an implementation of `BitFlags` came from the `bitflags!` macro.
+		pub trait ImplementedByBitFlagsMacro {}
+
+		pub mod __private
+		{
+			pub use super::{ImplementedByBitFlagsMacro, PublicFlags};
+		}
+
+	}
+}
+
 pub mod path
 {
 	pub use std::path::{ * };
+}
+
+pub mod ptr
+{
+	pub use std::ptr::{ * };
 }
 
 pub mod result
@@ -3676,8 +5050,7 @@ pub mod sqlite3
 
 	#[must_use] pub fn SQLITE_TRANSIENT() -> sqlite3_destructor_type
 	{ Some(unsafe { mem::transmute::<isize, unsafe extern "C" fn(*mut ::ffi::c_void)>(-1_isize) }) }
-
-	#[allow(dead_code, clippy::all)]
+    
 	mod bindings
 	{
 		/*!
@@ -5957,14 +7330,16 @@ pub mod sqlite3
 		use ::
 		{
             ffi::{ c_char, c_int, NulError },
+            path::{ PathBuf },
             sqlite3::
             {
+                bindings::{ sqlite3 },
                 types::
                 {
                     FromSqlError,
                     Type,
                 },
-                errmsg_to_string, Result
+                *,
             },
 			*,
 		};
@@ -6379,15 +7754,13 @@ pub mod sqlite3
 		}
 
 		impl From<str::Utf8Error> for Error {
-			#[cold]
-			fn from(err: str::Utf8Error) -> Self {
+			#[cold] fn from(err: str::Utf8Error) -> Self {
 				Self::Utf8Error(err)
 			}
 		}
 
 		impl From<NulError> for Error {
-			#[cold]
-			fn from(err: NulError) -> Self {
+			#[cold] fn from(err: NulError) -> Self {
 				Self::NulError(err)
 			}
 		}
@@ -6396,8 +7769,7 @@ pub mod sqlite3
 		/// The conversion isn't precise, but it's convenient to have it
 		/// to allow use of `get_raw(…).as_…()?` in callbacks that take `Error`.
 		impl From<FromSqlError> for Error {
-			#[cold]
-			fn from(err: FromSqlError) -> Self {
+			#[cold] fn from(err: FromSqlError) -> Self {
 				// The error type requires index and type fields, but they aren't known in this
 				// context.
 				match err {
@@ -6508,7 +7880,7 @@ pub mod sqlite3
 			/// Returns the underlying SQLite error if this is [`Error::SqliteFailure`].
 			#[inline]
 			#[must_use]
-			pub fn sqlite_error(&self) -> Option<&ffi::Error> {
+			pub fn sqlite_error(&self) -> Option<&Error> {
 				match self {
 					Self::SqliteFailure(error, _) => Some(error),
 					_ => None,
@@ -6518,26 +7890,22 @@ pub mod sqlite3
 			/// [`Error::SqliteFailure`].
 			#[inline]
 			#[must_use]
-			pub fn sqlite_error_code(&self) -> Option<ffi::ErrorCode> {
+			pub fn sqlite_error_code(&self) -> Option<ErrorCode> {
 				self.sqlite_error().map(|error| error.code)
 			}
 		}
-
-		// These are public but not re-exported by lib.rs, so only visible within crate.
-
-		#[cold]
-		pub fn error_from_sqlite_code(code: c_int, message: Option<String>) -> Error {
-			Error::SqliteFailure(ffi::Error::new(code), message)
+        
+        #[cold] pub fn error_from_sqlite_code(code: c_int, message: Option<String>) -> Error {
+			Error::SqliteFailure(Error::new(code), message)
 		}
 
-		#[cold]
-		pub unsafe fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
+		#[cold] pub unsafe fn error_from_handle(db: *mut sqlite3, code: c_int) -> Error {
 			error_from_sqlite_code(code, error_msg(db, code))
 		}
 
-		unsafe fn error_msg(db: *mut ffi::sqlite3, code: c_int) -> Option<String> {
-			if db.is_null() || ffi::sqlite3_errcode(db) != code {
-				let err_str = ffi::sqlite3_errstr(code);
+		unsafe fn error_msg(db: *mut sqlite3, code: c_int) -> Option<String> {
+			if db.is_null() || sqlite3_errcode(db) != code {
+				let err_str = sqlite3_errstr(code);
 				if err_str.is_null() {
 					None
 				} else {
@@ -6548,7 +7916,7 @@ pub mod sqlite3
 			}
 		}
 
-		pub unsafe fn decode_result_raw(db: *mut ffi::sqlite3, code: c_int) -> Result<()> {
+		pub unsafe fn decode_result_raw(db: *mut sqlite3, code: c_int) -> Result<()> {
 			if code == ffi::SQLITE_OK {
 				Ok(())
 			} else {
@@ -6556,14 +7924,13 @@ pub mod sqlite3
 			}
 		}
 		
-		#[cold]
-		pub unsafe fn error_with_offset(db: *mut ffi::sqlite3, code: c_int, sql: &str) -> Error {
+		#[cold] pub unsafe fn error_with_offset(db: *mut sqlite3, code: c_int, sql: &str) -> Error {
 			if db.is_null() {
 				error_from_sqlite_code(code, None)
 			} else {
-				let error = ffi::Error::new(code);
+				let error = Error::new(code);
 				let msg = error_msg(db, code);
-				if ffi::ErrorCode::Unknown == error.code {
+				if ErrorCode::Unknown == error.code {
 					let offset = ffi::sqlite3_error_offset(db);
 					if offset >= 0 {
 						return Error::SqlInputError {
@@ -6586,19 +7953,17 @@ pub mod sqlite3
 			}
 		}
 		/// Transform Rust error to SQLite error (message and code).
-		/// # Safety
-		/// This function is unsafe because it uses raw pointer
 		pub unsafe fn to_sqlite_error(e: &Error, err_msg: *mut *mut c_char) -> c_int {
-			use crate::util::alloc;
+			//use crate::util::alloc;
 			match e {
 				Error::SqliteFailure(err, s) => {
 					if let Some(s) = s {
-						*err_msg = alloc(s);
+						*err_msg = alloc::alloc(s);
 					}
 					err.extended_code
 				}
 				err => {
-					*err_msg = alloc(&err.to_string());
+					*err_msg = alloc::alloc(&err.to_string());
 					ffi::SQLITE_ERROR
 				}
 			}
@@ -6628,7 +7993,6 @@ pub mod sqlite3
 			impl Sealed for &str {}
 			impl Sealed for &CStr {}
 		}
-
 		/// A trait implemented by types that can index into parameters of a statement.
 		///
 		/// It is only implemented for `usize` and `&str` and `&CStr`.
@@ -6759,13 +8123,11 @@ pub mod sqlite3
 				self.cache.flush();
 			}
 		}
-
 		/// Prepared statements LRU cache.
 		#[derive(Debug)]
 		pub struct StatementCache(RefCell<LruCache<Arc<str>, RawStatement>>);
 
 		unsafe impl Send for StatementCache {}
-
 		/// Cacheable statement.
 		pub struct CachedStatement<'conn> {
 			stmt: Option<Statement<'conn>>,
@@ -6906,7 +8268,6 @@ pub mod sqlite3
 				self.decl_type
 			}
 		}
-
 		/// Metadata about the origin of a column of a SQLite query
 		#[cfg(feature = "column_metadata")]
 		#[derive(Debug)]
@@ -7313,46 +8674,34 @@ pub mod sqlite3
 			/// Activates or deactivates the "defensive" flag for a database connection.
 			SQLITE_DBCONFIG_DEFENSIVE = 1010, // 3.26.0
 			/// Activates or deactivates the `writable_schema` flag.
-			#[cfg(feature = "modern_sqlite")]
 			SQLITE_DBCONFIG_WRITABLE_SCHEMA = 1011, // 3.28.0
 			/// Activates or deactivates the legacy behavior of the ALTER TABLE RENAME
 			/// command.
-			#[cfg(feature = "modern_sqlite")]
 			SQLITE_DBCONFIG_LEGACY_ALTER_TABLE = 1012, // 3.29
 			/// Activates or deactivates the legacy double-quoted string literal
 			/// misfeature for DML statements only.
-			#[cfg(feature = "modern_sqlite")]
 			SQLITE_DBCONFIG_DQS_DML = 1013, // 3.29.0
 			/// Activates or deactivates the legacy double-quoted string literal
 			/// misfeature for DDL statements.
-			#[cfg(feature = "modern_sqlite")]
 			SQLITE_DBCONFIG_DQS_DDL = 1014, // 3.29.0
 			/// Enable or disable views.
-			#[cfg(feature = "modern_sqlite")]
 			SQLITE_DBCONFIG_ENABLE_VIEW = 1015, // 3.30.0
 			/// Activates or deactivates the legacy file format flag.
-			#[cfg(feature = "modern_sqlite")]
 			SQLITE_DBCONFIG_LEGACY_FILE_FORMAT = 1016, // 3.31.0
 			/// Tells SQLite to assume that database schemas (the contents of the
 			/// `sqlite_master` tables) are untainted by malicious content.
-			#[cfg(feature = "modern_sqlite")]
 			SQLITE_DBCONFIG_TRUSTED_SCHEMA = 1017, // 3.31.0
 			/// Sets or clears a flag that enables collection of the
 			/// `sqlite3_stmt_scanstatus_v2()` statistics
-			#[cfg(feature = "modern_sqlite")]
 			SQLITE_DBCONFIG_STMT_SCANSTATUS = 1018, // 3.42.0
 			/// Changes the default order in which tables and indexes are scanned
-			#[cfg(feature = "modern_sqlite")]
 			SQLITE_DBCONFIG_REVERSE_SCANORDER = 1019, // 3.42.0
 			/// Enables or disables the ability of the ATTACH DATABASE SQL command
 			/// to create a new database file if the database filed named in the ATTACH command does not already exist.
-			#[cfg(feature = "modern_sqlite")]
 			SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE = 1020, // 3.49.0
 			/// Enables or disables the ability of the ATTACH DATABASE SQL command to open a database for writing.
-			#[cfg(feature = "modern_sqlite")]
 			SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE = 1021, // 3.49.0
 			/// Enables or disables the ability to include comments in SQL text.
-			#[cfg(feature = "modern_sqlite")]
 			SQLITE_DBCONFIG_ENABLE_COMMENTS = 1022, // 3.49.0
 		}
 
@@ -7442,14 +8791,14 @@ pub mod sqlite3
         */
         pub struct InnerConnection
 		{
-			pub db: *mut ffi::sqlite3,
+			pub db: *mut sqlite3,
 			// It's unsafe to call `sqlite3_close` while another thread is performing
 			// a `sqlite3_interrupt`, and vice versa, so we take this mutex during
 			// those functions. This protects a copy of the `db` pointer (which is
 			// cleared on closing), however the main copy, `db`, is unprotected.
 			// Otherwise, a long-running query would prevent calling interrupt, as
 			// interrupt would only acquire the lock after the query's completion.
-			interrupt_lock: Arc<Mutex<*mut ffi::sqlite3>>,
+			interrupt_lock: Arc<Mutex<*mut sqlite3>>,
 			#[cfg(feature = "hooks")]
 			pub commit_hook: Option<Box<dyn FnMut() -> bool + Send>>,
 			#[cfg(feature = "hooks")]
@@ -7473,7 +8822,7 @@ pub mod sqlite3
 
 		impl InnerConnection {
 			#[expect(clippy::mutex_atomic, clippy::arc_with_non_send_sync)] // See unsafe impl Send / Sync for InterruptHandle
-			#[inline] pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> Self {
+			#[inline] pub unsafe fn new(db: *mut sqlite3, owned: bool) -> Self {
 				Self {
 					db,
 					interrupt_lock: Arc::new(Mutex::new(if owned { db } else { ptr::null_mut() })),
@@ -7514,7 +8863,7 @@ pub mod sqlite3
 				};
 
 				unsafe {
-					let mut db: *mut ffi::sqlite3 = ptr::null_mut();
+					let mut db: *mut sqlite3 = ptr::null_mut();
 					let r = ffi::sqlite3_open_v2(c_path.as_ptr(), &mut db, flags.bits(), z_vfs);
 					if r != ffi::SQLITE_OK {
 						let e = if db.is_null() {
@@ -7522,8 +8871,8 @@ pub mod sqlite3
 						} else {
 							let mut e = error_from_handle(db, r);
 							if let Error::SqliteFailure(
-								ffi::Error {
-									code: ffi::ErrorCode::CannotOpen,
+								Error {
+									code: ErrorCode::CannotOpen,
 									..
 								},
 								Some(msg),
@@ -7554,7 +8903,7 @@ pub mod sqlite3
 				}
 			}
 
-			#[inline] pub fn db(&self) -> *mut ffi::sqlite3 {
+			#[inline] pub fn db(&self) -> *mut sqlite3 {
 				self.db
 			}
 
@@ -7637,7 +8986,7 @@ pub mod sqlite3
 				flags: PrepFlags,
 			) -> Result<(Statement<'a>, usize)>
             {
-				let mut c_stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
+				let mut c_stmt: *mut sqlite3_stmt = ptr::null_mut();
 				let (c_sql, len, _) = str_for_sqlite(sql.as_bytes())?;
 				let mut c_tail: *const c_char = ptr::null();
 				#[cfg(not(feature = "unlock_notify"))]
@@ -7681,38 +9030,20 @@ pub mod sqlite3
 			}
 
 			#[inline]
-			#[cfg(not(feature = "modern_sqlite"))]
-			unsafe fn prepare_(
-				&self,
-				z_sql: *const c_char,
-				n_byte: c_int,
-				_: PrepFlags,
-				pp_stmt: *mut *mut ffi::sqlite3_stmt,
-				pz_tail: *mut *const c_char,
-			) -> c_int {
-				ffi::sqlite3_prepare_v2(self.db(), z_sql, n_byte, pp_stmt, pz_tail)
-			}
-
-			#[inline]
-			#[cfg(feature = "modern_sqlite")]
 			unsafe fn prepare_(
 				&self,
 				z_sql: *const c_char,
 				n_byte: c_int,
 				flags: PrepFlags,
-				pp_stmt: *mut *mut ffi::sqlite3_stmt,
+				pp_stmt: *mut *mut sqlite3_stmt,
 				pz_tail: *mut *const c_char,
 			) -> c_int {
 				ffi::sqlite3_prepare_v3(self.db(), z_sql, n_byte, flags.bits(), pp_stmt, pz_tail)
 			}
 
-			#[inline] pub fn changes(&self) -> u64 {
-				#[cfg(not(feature = "modern_sqlite"))]
-				unsafe {
-					ffi::sqlite3_changes(self.db()) as u64
-				}
-				#[cfg(feature = "modern_sqlite")] // 3.37.0
-				unsafe {
+			#[inline] pub fn changes(&self) -> u64
+            {
+                unsafe {
 					ffi::sqlite3_changes64(self.db()) as u64
 				}
 			}
@@ -7749,11 +9080,9 @@ pub mod sqlite3
 			pub fn cache_flush(&mut self) -> Result<()> {
 				crate::error::check(unsafe { ffi::sqlite3_db_cacheflush(self.db()) })
 			}
-
-			#[cfg(not(feature = "hooks"))]
+            
 			#[inline] fn remove_hooks(&mut self) {}
-
-			#[cfg(not(feature = "preupdate_hook"))]
+            
 			#[inline] fn remove_preupdate_hook(&mut self) {}
 
 			pub fn db_readonly<N: Name>(&self, db_name: N) -> Result<bool>
@@ -7770,8 +9099,7 @@ pub mod sqlite3
 					_ => Err(err!(r, "Unexpected result")),
 				}
 			}
-
-			#[cfg(feature = "modern_sqlite")] // 3.37.0
+            
 			pub fn txn_state<N: Name>(
 				&self,
 				db_name: Option<N>,
@@ -7796,21 +9124,18 @@ pub mod sqlite3
 				self.decode_result(unsafe { ffi::sqlite3_db_release_memory(self.db) })
 			}
 
-			#[cfg(feature = "modern_sqlite")] // 3.41.0
 			pub fn is_interrupted(&self) -> bool {
 				unsafe { ffi::sqlite3_is_interrupted(self.db) == 1 }
 			}
 		}
 
-		#[inline]
-		pub(crate) unsafe fn get_autocommit(ptr: *mut ffi::sqlite3) -> bool {
+		#[inline] pub unsafe fn get_autocommit(ptr: *mut sqlite3) -> bool {
 			ffi::sqlite3_get_autocommit(ptr) != 0
 		}
 
-		#[inline]
-		pub(crate) unsafe fn db_filename<N: Name>(
-			_: std::marker::PhantomData<&()>,
-			ptr: *mut ffi::sqlite3,
+		#[inline] pub unsafe fn db_filename<N: Name>(
+			_: ::marker::PhantomData<&()>,
+			ptr: *mut sqlite3,
 			db_name: N,
 		) -> Option<&str> {
 			let db_name = db_name.as_cstr().unwrap();
@@ -7823,20 +9148,11 @@ pub mod sqlite3
 		}
 
 		impl Drop for InnerConnection {
-			#[expect(unused_must_use)]
-			#[inline] fn drop(&mut self) {
+				#[inline] fn drop(&mut self) {
 				self.close();
 			}
 		}
-
-		// threading mode checks are not necessary (and do not work) on target
-		// platforms that do not have threading (such as webassembly)
-		#[cfg(target_arch = "wasm32")]
-		fn ensure_safe_sqlite_threading_mode() -> Result<()> {
-			Ok(())
-		}
-
-		#[cfg(not(any(target_arch = "wasm32")))]
+        
 		fn ensure_safe_sqlite_threading_mode() -> Result<()> {
 			// Ensure SQLite was compiled in threadsafe mode.
 			if unsafe { ffi::sqlite3_threadsafe() == 0 } {
@@ -7885,7 +9201,6 @@ pub mod sqlite3
 			pub trait Sealed {}
 		}
 		use sealed::Sealed;
-
 		/// Trait used for [sets of parameter][params] passed into SQL
 		/// statements/queries.
 		///
@@ -8198,7 +9513,6 @@ pub mod sqlite3
 			1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17
 			18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
 		);
-
 		/// Adapter type which allows any iterator over [`ToSql`] values to implement
 		/// [`Params`].
 		///
@@ -8296,7 +9610,6 @@ pub mod sqlite3
 		/// something tricky, or should take a moment to think about the design).
 		#[derive(Clone, Debug)]
 		pub struct ParamsFromIter<I>(I);
-
 		/// Constructor function for a [`ParamsFromIter`]. See its documentation for
 		/// more.
 		#[inline]
@@ -8633,7 +9946,7 @@ pub mod sqlite3
             *,
         };
         /*
-		use fallible_iterator::FallibleIterator;
+		use fallible::iterator::FallibleIterator;
 		use fallible_streaming_iterator::FallibleStreamingIterator;
 		use std::convert;
 
@@ -8643,7 +9956,7 @@ pub mod sqlite3
 		/// A handle (lazy fallible streaming iterator) for the resulting rows of a query.
 		#[must_use = "Rows is lazy and will do nothing unless consumed"]
 		pub struct Rows<'stmt> {
-			pub(crate) stmt: Option<&'stmt Statement<'stmt>>,
+			pub stmt: Option<&'stmt Statement<'stmt>>,
 			row: Option<Row<'stmt>>,
 		}
 
@@ -8675,7 +9988,7 @@ pub mod sqlite3
 			/// Map over this `Rows`, converting it to a [`Map`], which
 			/// implements `FallibleIterator`.
 			/// ```rust,no_run
-			/// use fallible_iterator::FallibleIterator;
+			/// use fallible::iterator::FallibleIterator;
 			/// # use rusqlite::{Result, Statement};
 			/// fn query(stmt: &mut Statement) -> Result<Vec<i64>> {
 			///     let rows = stmt.query([])?;
@@ -8715,7 +10028,7 @@ pub mod sqlite3
 
 		impl<'stmt> Rows<'stmt> {
 			#[inline]
-			pub(crate) fn new(stmt: &'stmt Statement<'stmt>) -> Self {
+			pub fn new(stmt: &'stmt Statement<'stmt>) -> Self {
 				Rows {
 					stmt: Some(stmt),
 					row: None,
@@ -8723,7 +10036,7 @@ pub mod sqlite3
 			}
 
 			#[inline]
-			pub(crate) fn get_expected_row(&mut self) -> Result<&Row<'stmt>> {
+			pub fn get_expected_row(&mut self) -> Result<&Row<'stmt>> {
 				match self.next()? {
 					Some(row) => Ok(row),
 					None => Err(Error::QueryReturnedNoRows),
@@ -8732,12 +10045,10 @@ pub mod sqlite3
 		}
 
 		impl Drop for Rows<'_> {
-			#[expect(unused_must_use)]
-			#[inline] fn drop(&mut self) {
+				#[inline] fn drop(&mut self) {
 				self.reset();
 			}
 		}
-
 		/// `F` is used to transform the _streaming_ iterator into a _fallible_
 		/// iterator.
 		#[must_use = "iterators are lazy and do nothing unless consumed"]
@@ -8760,7 +10071,6 @@ pub mod sqlite3
 				}
 			}
 		}
-
 		/// An iterator over the mapped resulting rows of a query.
 		///
 		/// `F` is used to transform the _streaming_ iterator into a _standard_
@@ -8786,7 +10096,6 @@ pub mod sqlite3
 					.map(|row_result| row_result.and_then(map))
 			}
 		}
-
 		/// An iterator over the mapped resulting rows of a query, with an Error type
 		/// unifying with Error.
 		#[must_use = "iterators are lazy and do nothing unless consumed"]
@@ -8811,7 +10120,6 @@ pub mod sqlite3
 					.map(|row_result| row_result.map_err(E::from).and_then(map))
 			}
 		}
-
 		/// `FallibleStreamingIterator` differs from the standard library's `Iterator`
 		/// in two ways:
 		/// * each call to `next` (`sqlite3_step`) can fail.
@@ -8862,10 +10170,9 @@ pub mod sqlite3
 				self.row.as_ref()
 			}
 		}
-
 		/// A single result row of a query.
 		pub struct Row<'stmt> {
-			pub(crate) stmt: &'stmt Statement<'stmt>,
+			pub stmt: &'stmt Statement<'stmt>,
 		}
 
 		impl Row<'_> {
@@ -8971,11 +10278,10 @@ pub mod sqlite3
 				self.stmt
 			}
 		}
-
 		/// Debug `Row` like an ordered `Map<Result<&str>, Result<(Type, ValueRef)>>`
 		/// with column name as key except that for `Type::Blob` only its size is
 		/// printed (not its content).
-		impl std::fmt::Debug for Row<'_> {
+		impl ::fmt::Debug for Row<'_> {
 			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 				let mut dm = f.debug_map();
 				for c in 0..self.stmt.column_count() {
@@ -9019,7 +10325,6 @@ pub mod sqlite3
 			impl Sealed for usize {}
 			impl Sealed for &str {}
 		}
-
 		/// A trait implemented by types that can index into columns of a row.
 		///
 		/// It is only implemented for `usize` and `&str`.
@@ -9129,7 +10434,7 @@ pub mod sqlite3
 			#[derive(Debug)]
 			pub struct RawStatement
 			{
-				ptr: *mut ffi::sqlite3_stmt,
+				ptr: *mut sqlite3_stmt,
 				// Cached indices of named parameters, computed on the fly.
 				cache: ParamIndexCache,
 				// Cached SQL (trimmed) that we use as the key when we're in the statement
@@ -9147,7 +10452,7 @@ pub mod sqlite3
 
 			impl RawStatement {
 				#[inline]
-				pub unsafe fn new(stmt: *mut ffi::sqlite3_stmt) -> Self {
+				pub unsafe fn new(stmt: *mut sqlite3_stmt) -> Self {
 					Self {
 						ptr: stmt,
 						cache: ParamIndexCache::default(),
@@ -9161,17 +10466,17 @@ pub mod sqlite3
 				}
 
 				#[inline]
-				pub(crate) fn set_statement_cache_key(&mut self, p: impl Into<Arc<str>>) {
+				pub fn set_statement_cache_key(&mut self, p: impl Into<Arc<str>>) {
 					self.statement_cache_key = Some(p.into());
 				}
 
 				#[inline]
-				pub(crate) fn statement_cache_key(&self) -> Option<Arc<str>> {
+				pub fn statement_cache_key(&self) -> Option<Arc<str>> {
 					self.statement_cache_key.clone()
 				}
 
 				#[inline]
-				pub unsafe fn ptr(&self) -> *mut ffi::sqlite3_stmt {
+				pub unsafe fn ptr(&self) -> *mut sqlite3_stmt {
 					self.ptr
 				}
 
@@ -9359,7 +10664,7 @@ pub mod sqlite3
 				}
 
 				#[inline]
-				pub(crate) fn expanded_sql(&self) -> Option<SqliteMallocString> {
+				pub fn expanded_sql(&self) -> Option<SqliteMallocString> {
 					unsafe { expanded_sql(self.ptr) }
 				}
 
@@ -9378,12 +10683,12 @@ pub mod sqlite3
 			}
 
 			#[inline]
-			pub(crate) unsafe fn expanded_sql(ptr: *mut ffi::sqlite3_stmt) -> Option<SqliteMallocString> {
+			pub unsafe fn expanded_sql(ptr: *mut sqlite3_stmt) -> Option<SqliteMallocString> {
 				SqliteMallocString::from_raw(ffi::sqlite3_expanded_sql(ptr))
 			}
 			#[inline]
-			pub(crate) unsafe fn stmt_status(
-				ptr: *mut ffi::sqlite3_stmt,
+			pub unsafe fn stmt_status(
+				ptr: *mut sqlite3_stmt,
 				status: StatementStatus,
 				reset: bool,
 			) -> i32 {
@@ -9402,8 +10707,8 @@ pub mod sqlite3
 		
         /// A prepared statement.
 		pub struct Statement<'conn> {
-			pub(crate) conn: &'conn Connection,
-			pub(crate) stmt: RawStatement,
+			pub conn: &'conn Connection,
+			pub stmt: RawStatement,
 		}
 
 		impl Statement<'_> {
@@ -9813,7 +11118,8 @@ pub mod sqlite3
 			///
 			/// Will return Err if `name` is invalid. Will return Ok(None) if the name
 			/// is valid but not a bound parameter of this statement.
-			#[inline] pub fn parameter_index(&self, name: &str) -> Result<Option<usize>> {
+			#[inline] pub fn parameter_index(&self, name: &str) -> Result<Option<usize>>
+            {
 				Ok(self.stmt.bind_parameter_index(name))
 			}
 			/// Return the SQL parameter name given its (one-based) index (the inverse
@@ -9845,7 +11151,7 @@ pub mod sqlite3
 			}
 
 			#[inline]
-			pub(crate) fn bind_parameters<P>(&mut self, params: P) -> Result<()>
+			pub fn bind_parameters<P>(&mut self, params: P) -> Result<()>
 			where
 				P: IntoIterator,
 				P::Item: ToSql,
@@ -9867,7 +11173,7 @@ pub mod sqlite3
 			}
 
 			#[inline]
-			pub(crate) fn ensure_parameter_count(&self, n: usize) -> Result<()>
+			pub fn ensure_parameter_count(&self, n: usize) -> Result<()>
             {
 				let count = self.parameter_count();
 				if count != n {
@@ -9878,7 +11184,7 @@ pub mod sqlite3
 			}
 
 			#[inline]
-			pub(crate) fn bind_parameters_named<S: BindIndex, T: ToSql>(
+			pub fn bind_parameters_named<S: BindIndex, T: ToSql>(
 				&mut self,
 				params: &[(S, T)],
 			) -> Result<()> {
@@ -10070,7 +11376,8 @@ pub mod sqlite3
 			#[cfg(not(feature = "extra_check"))]
 			#[inline]
 			#[expect(clippy::unnecessary_wraps)]
-			fn check_update(&self) -> Result<()> {
+			fn check_update(&self) -> Result<()>
+            {
 				Ok(())
 			}
 			/// Returns a string containing the SQL text of prepared statement with
@@ -10106,7 +11413,7 @@ pub mod sqlite3
 			/// connection has closed is illegal, but `RawStatement` does not enforce
 			/// this, as it loses our protective `'conn` lifetime bound.
 			#[inline]
-			pub(crate) unsafe fn into_raw(mut self) -> RawStatement {
+			pub unsafe fn into_raw(mut self) -> RawStatement {
 				let mut stmt = RawStatement::new(ptr::null_mut());
 				mem::swap(&mut stmt, &mut self.stmt);
 				stmt
@@ -10116,7 +11423,7 @@ pub mod sqlite3
 				self.stmt.clear_bindings();
 			}
 
-			pub(crate) unsafe fn ptr(&self) -> *mut ffi::sqlite3_stmt {
+			pub unsafe fn ptr(&self) -> *mut sqlite3_stmt {
 				self.stmt.ptr()
 			}
 		}
@@ -10137,8 +11444,7 @@ pub mod sqlite3
 		}
 
 		impl Drop for Statement<'_> {
-			#[expect(unused_must_use)]
-			#[inline] fn drop(&mut self) {
+				#[inline] fn drop(&mut self) {
 				self.finalize_();
 			}
 		}
@@ -10223,7 +11529,6 @@ pub mod sqlite3
 				}
 			}
 		}
-
 		/// Prepared statement status counters.
 		///
 		/// See `https://www.sqlite.org/c3ref/c_stmtstatus_counter.html`
@@ -10262,17 +11567,16 @@ pub mod sqlite3
         */
         use ::
         {
+            ops::{ Deref },
+            sqlite3::{ Connection, Result },
             *,
         };
         /*
-		use crate::{Connection, Result};
-		use std::ops::Deref;
         */
-		/// Options for transaction behavior. See [BEGIN
-		/// TRANSACTION](http://www.sqlite.org/lang_transaction.html) for details.
-		#[derive(Copy, Clone)]
-		#[non_exhaustive]
-		pub enum TransactionBehavior {
+		/// Options for transaction behavior.
+		#[non_exhaustive] #[derive(Copy, Clone)]
+		pub enum TransactionBehavior
+        {
 			/// DEFERRED means that the transaction does not actually start until the
 			/// database is first accessed.
 			Deferred,
@@ -10283,11 +11587,10 @@ pub mod sqlite3
 			/// while the transaction is underway.
 			Exclusive,
 		}
-
 		/// Options for how a Transaction or Savepoint should behave when it is dropped.
-		#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-		#[non_exhaustive]
-		pub enum DropBehavior {
+		#[non_exhaustive] #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+		pub enum DropBehavior
+        {
 			/// Roll back the changes. This is the default.
 			Rollback,
 
@@ -10301,59 +11604,13 @@ pub mod sqlite3
 			/// Panic. Used to enforce intentional behavior during development.
 			Panic,
 		}
-
 		/// Represents a transaction on a database connection.
-		///
-		/// ## Note
-		///
-		/// Transactions will roll back by default. Use `commit` method to explicitly
-		/// commit the transaction, or use `set_drop_behavior` to change what happens
-		/// when the transaction is dropped.
-		///
-		/// ## Example
-		///
-		/// ```rust,no_run
-		/// # use rusqlite::{Connection, Result};
-		/// # fn do_queries_part_1(_conn: &Connection) -> Result<()> { Ok(()) }
-		/// # fn do_queries_part_2(_conn: &Connection) -> Result<()> { Ok(()) }
-		/// fn perform_queries(conn: &mut Connection) -> Result<()> {
-		///     let tx = conn.transaction()?;
-		///
-		///     do_queries_part_1(&tx)?; // tx causes rollback if this fails
-		///     do_queries_part_2(&tx)?; // tx causes rollback if this fails
-		///
-		///     tx.commit()
-		/// }
-		/// ```
 		#[derive(Debug)]
 		pub struct Transaction<'conn> {
 			conn: &'conn Connection,
 			drop_behavior: DropBehavior,
 		}
-
 		/// Represents a savepoint on a database connection.
-		///
-		/// ## Note
-		///
-		/// Savepoints will roll back by default. Use `commit` method to explicitly
-		/// commit the savepoint, or use `set_drop_behavior` to change what happens
-		/// when the savepoint is dropped.
-		///
-		/// ## Example
-		///
-		/// ```rust,no_run
-		/// # use rusqlite::{Connection, Result};
-		/// # fn do_queries_part_1(_conn: &Connection) -> Result<()> { Ok(()) }
-		/// # fn do_queries_part_2(_conn: &Connection) -> Result<()> { Ok(()) }
-		/// fn perform_queries(conn: &mut Connection) -> Result<()> {
-		///     let sp = conn.savepoint()?;
-		///
-		///     do_queries_part_1(&sp)?; // sp causes rollback if this fails
-		///     do_queries_part_2(&sp)?; // sp causes rollback if this fails
-		///
-		///     sp.commit()
-		/// }
-		/// ```
 		#[derive(Debug)]
 		pub struct Savepoint<'conn> {
 			conn: &'conn Connection,
@@ -10486,7 +11743,6 @@ pub mod sqlite3
 			}
 		}
 
-		#[expect(unused_must_use)]
 		impl Drop for Transaction<'_> {
 			#[inline] fn drop(&mut self) {
 				self.finish_();
@@ -10588,19 +11844,17 @@ pub mod sqlite3
 				self.conn
 			}
 		}
-
-		#[expect(unused_must_use)]
-		impl Drop for Savepoint<'_> {
+        
+		impl Drop for Savepoint<'_>
+        {
 			#[inline] fn drop(&mut self) {
 				self.finish_();
 			}
 		}
-
 		/// Transaction state of a database
-		#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-		#[non_exhaustive]
-		#[cfg(feature = "modern_sqlite")] // 3.37.0
-		pub enum TransactionState {
+		#[non_exhaustive] #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+		pub enum TransactionState
+        {
 			/// Equivalent to `SQLITE_TXN_NONE`
 			None,
 			/// Equivalent to `SQLITE_TXN_READ`
@@ -10609,7 +11863,8 @@ pub mod sqlite3
 			Write,
 		}
 
-		impl Connection {
+		impl Connection
+        {
 			/// Begin a new transaction with the default behavior (DEFERRED).
 			///
 			/// The transaction defaults to rolling back when it is dropped. If you
@@ -10771,11 +12026,6 @@ pub mod sqlite3
             *,
         };
         /*
-		pub use self::to_sql::{ToSql, ToSqlOutput};
-		pub use self::value::Value;
-		pub use self::value_ref::ValueRef;
-
-		use std::fmt;
 		*/
 		mod from_sql
 		{
@@ -11395,7 +12645,7 @@ pub mod sqlite3
 				}
 			}
 
-		}
+		} pub use self::to_sql::{ ToSql, ToSqlOutput };
 		
 		mod value
 		{
@@ -11547,7 +12797,7 @@ pub mod sqlite3
 				}
 			}
 
-		}
+		} pub use self::value_ref::{ ValueRef };
 		
 		mod value_ref
 		{
@@ -11772,7 +13022,7 @@ pub mod sqlite3
 				feature = "preupdate_hook"
 			))]
 			impl ValueRef<'_> {
-				pub(crate) unsafe fn from_value(value: *mut crate::ffi::sqlite3_value) -> Self {
+				pub unsafe fn from_value(value: *mut crate::ffi::sqlite3_value) -> Self {
 					use crate::ffi;
 					use std::slice::from_raw_parts;
 
@@ -11820,26 +13070,14 @@ pub mod sqlite3
 				// TODO sqlite3_value_frombind // 3.28.0
 			}
 
-		}
+		}  pub use self::value::{ Value };
 		/// Empty struct that can be used to fill in a query parameter as `NULL`.
-		///
-		/// ## Example
-		///
-		/// ```rust,no_run
-		/// # use rusqlite::{Connection, Result};
-		/// # use rusqlite::types::{Null};
-		///
-		/// fn insert_null(conn: &Connection) -> Result<usize> {
-		///     conn.execute("INSERT INTO people (name) VALUES (?1)", [Null])
-		/// }
-		/// ```
 		#[derive(Copy, Clone)]
 		pub struct Null;
-
 		/// SQLite data types.
-		/// See [Fundamental Datatypes](https://sqlite.org/c3ref/c_blob.html).
 		#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-		pub enum Type {
+		pub enum Type
+        {
 			/// NULL
 			Null,
 			/// 64-bit signed integer
@@ -11852,7 +13090,8 @@ pub mod sqlite3
 			Blob,
 		}
 
-		impl fmt::Display for Type {
+		impl fmt::Display for Type
+        {
 			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 				match *self {
 					Self::Null => f.pad("Null"),
@@ -11887,7 +13126,6 @@ pub mod sqlite3
 		pub fn version_number() -> i32 {
 			unsafe { ffi::sqlite3_libversion_number() }
 		}
-
 		/// Returns the SQLite version as a string; e.g., `"3.16.2"` for version 3.16.2.
 		///
 		/// See [`sqlite3_libversion()`](https://www.sqlite.org/c3ref/libversion.html).
@@ -11910,14 +13148,14 @@ pub mod sqlite3
         Internal utilities */
         use ::
         {
+            ffi::{ CStr },
+            sqlite3::
+            { 
+                Result
+            },
             *,
         };
         /*
-		pub(crate) use param_cache::ParamIndexCache;
-		pub(crate) use small_cstr::SmallCString;
-		pub(crate) use sqlite_string::{alloc, SqliteMallocString};
-		use crate::Result;
-		use std::ffi::CStr;
         */
         pub mod param_cache
 		{
@@ -11925,20 +13163,19 @@ pub mod sqlite3
 			*/
 			use ::
 			{
+                cell::{ RefCell },
+                collections::{ BTreeMap },
 				*,
 			};
+            use super::small_cstr::SmallCString;
 			/*
-			use super::SmallCString;
-			use std::cell::RefCell;
-			use std::collections::BTreeMap;
 			*/
 			/// Maps parameter names to parameter indices.
 			#[derive(Default, Clone, Debug)]
-			// BTreeMap seems to do better here unless we want to pull in a custom hash
-			// function.
-			pub(crate) struct ParamIndexCache(RefCell<BTreeMap<SmallCString, usize>>);
+			pub struct ParamIndexCache(RefCell<BTreeMap<SmallCString, usize>>);
 
-			impl ParamIndexCache {
+			impl ParamIndexCache
+            {
 				pub fn get_or_insert_with<F>(&self, s: &str, func: F) -> Option<usize>
 				where
 					F: FnOnce(&std::ffi::CStr) -> Option<usize>,
@@ -11957,7 +13194,7 @@ pub mod sqlite3
 				}
 			}
 
-		}
+		} pub use self::param_cache::ParamIndexCache;
 		
 		pub mod small_cstr
 		{
@@ -11965,19 +13202,18 @@ pub mod sqlite3
 			*/
 			use ::
 			{
+                ffi::{ CStr, CString, NulError },
 				*,
 			};
 			/*
 			use smallvec::{smallvec, SmallVec};
-			use std::ffi::{CStr, CString, NulError};
 			*/
-			/// Similar to `std::ffi::CString`, but avoids heap allocating if the string is
-			/// small enough. Also guarantees it's input is UTF-8 -- used for cases where we
-			/// need to pass a NUL-terminated string to SQLite, and we have a `&str`.
+			/// Similar to `std::ffi::CString`, but avoids heap allocating if the string is small enough.
 			#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 			pub struct SmallCString(SmallVec<[u8; 16]>);
 
-			impl SmallCString {
+			impl SmallCString 
+            {
 				#[inline]
 				pub fn new(s: &str) -> Result<Self, NulError> {
 					if s.as_bytes().contains(&0_u8) {
@@ -12055,20 +13291,23 @@ pub mod sqlite3
 				}
 			}
 
-			impl Default for SmallCString {
+			impl Default for SmallCString 
+            {
 				#[inline]
 				fn default() -> Self {
 					Self(smallvec![0])
 				}
 			}
 
-			impl std::fmt::Debug for SmallCString {
+			impl ::fmt::Debug for SmallCString 
+            {
 				fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 					f.debug_tuple("SmallCString").field(&self.as_str()).finish()
 				}
 			}
 
-			impl std::ops::Deref for SmallCString {
+			impl ::ops::Deref for SmallCString 
+            {
 				type Target = CStr;
 
 				#[inline]
@@ -12077,14 +13316,14 @@ pub mod sqlite3
 				}
 			}
 
-			impl std::borrow::Borrow<str> for SmallCString {
+			impl ::borrow::Borrow<str> for SmallCString 
+            {
 				#[inline]
 				fn borrow(&self) -> &str {
 					self.as_str()
 				}
 			}
-
-		}
+		} pub use self::small_cstr::SmallCString;
 		
 		pub mod sqlite_string
 		{
@@ -12092,54 +13331,38 @@ pub mod sqlite3
 			Used when either vtab or modern-sqlite is on. */
 			use ::
 			{
+                ffi::{ c_char, c_int, CStr },
+                marker::{ PhantomData },
+                ptr::{ NonNull },
 				*,
 			};
 			/*
-			// This is used when either vtab or modern-sqlite is on. Different methods are
-			// used in each feature. Avoid having to track this for each function. We will
-			// still warn for anything that's not used by either, though.
-			#![cfg_attr(not(feature = "vtab"), allow(dead_code))]
-			use crate::ffi;
-			use std::ffi::{c_char, c_int, CStr};
-			use std::marker::PhantomData;
-			use std::ptr::NonNull;
 			*/
 			// Space to hold this string must be obtained
 			// from an SQLite memory allocation function
-			pub(crate) fn alloc(s: &str) -> *mut c_char {
+			pub fn alloc(s: &str) -> *mut c_char
+            {
 				SqliteMallocString::from_str(s).into_raw()
 			}
 			/// A string we own that's allocated on the SQLite heap. Automatically calls
 			/// `sqlite3_free` when dropped, unless `into_raw` (or `into_inner`) is called
-			/// on it. If constructed from a rust string, `sqlite3_malloc` is used.
-			///
-			/// It has identical representation to a nonnull `*mut c_char`, so you can use
-			/// it transparently as one. It's nonnull, so Option<SqliteMallocString> can be
-			/// used for nullable ones (it's still just one pointer).
-			///
-			/// Most strings shouldn't use this! Only places where the string needs to be
-			/// freed with `sqlite3_free`. This includes `sqlite3_extended_sql` results,
-			/// some error message pointers... Note that misuse is extremely dangerous!
-			///
-			/// Note that this is *not* a lossless interface. Incoming strings with internal
-			/// NULs are modified, and outgoing strings which are non-UTF8 are modified.
-			/// This seems unavoidable -- it tries very hard to not panic.
+			/// on it.
 			#[repr(transparent)]
-			pub(crate) struct SqliteMallocString {
+			pub struct SqliteMallocString
+            {
 				ptr: NonNull<c_char>,
 				_boo: PhantomData<Box<[c_char]>>,
 			}
-			// This is owned data for a primitive type, and thus it's safe to implement
-			// these. That said, nothing needs them, and they make things easier to misuse.
 
 			// unsafe impl Send for SqliteMallocString {}
 			// unsafe impl Sync for SqliteMallocString {}
 
-			impl SqliteMallocString {
+			impl SqliteMallocString
+            {
 				/// SAFETY: Caller must be certain that `m` a nul-terminated c string
 				/// allocated by `sqlite3_malloc`, and that SQLite expects us to free it!
 				#[inline]
-				pub(crate) unsafe fn from_raw_nonnull(ptr: NonNull<c_char>) -> Self {
+				pub unsafe fn from_raw_nonnull(ptr: NonNull<c_char>) -> Self {
 					Self {
 						ptr,
 						_boo: PhantomData,
@@ -12149,14 +13372,14 @@ pub mod sqlite3
 				/// SAFETY: Caller must be certain that `m` a nul-terminated c string
 				/// allocated by `sqlite3_malloc`, and that SQLite expects us to free it!
 				#[inline]
-				pub(crate) unsafe fn from_raw(ptr: *mut c_char) -> Option<Self> {
+				pub unsafe fn from_raw(ptr: *mut c_char) -> Option<Self> {
 					NonNull::new(ptr).map(|p| Self::from_raw_nonnull(p))
 				}
 
 				/// Get the pointer behind `self`. After this is called, we no longer manage
 				/// it.
 				#[inline]
-				pub(crate) fn into_inner(self) -> NonNull<c_char> {
+				pub fn into_inner(self) -> NonNull<c_char> {
 					let p = self.ptr;
 					std::mem::forget(self);
 					p
@@ -12165,24 +13388,24 @@ pub mod sqlite3
 				/// Get the pointer behind `self`. After this is called, we no longer manage
 				/// it.
 				#[inline]
-				pub(crate) fn into_raw(self) -> *mut c_char {
+				pub fn into_raw(self) -> *mut c_char {
 					self.into_inner().as_ptr()
 				}
 
 				/// Borrow the pointer behind `self`. We still manage it when this function
 				/// returns. If you want to relinquish ownership, use `into_raw`.
 				#[inline]
-				pub(crate) fn as_ptr(&self) -> *const c_char {
+				pub fn as_ptr(&self) -> *const c_char {
 					self.ptr.as_ptr()
 				}
 
 				#[inline]
-				pub(crate) fn as_cstr(&self) -> &CStr {
+				pub fn as_cstr(&self) -> &CStr {
 					unsafe { CStr::from_ptr(self.as_ptr()) }
 				}
 
 				#[inline]
-				pub(crate) fn to_string_lossy(&self) -> std::borrow::Cow<'_, str> {
+				pub fn to_string_lossy(&self) -> std::borrow::Cow<'_, str> {
 					self.as_cstr().to_string_lossy()
 				}
 
@@ -12201,7 +13424,7 @@ pub mod sqlite3
 				///
 				/// This means it's safe to use in extern "C" functions even outside
 				/// `catch_unwind`.
-				pub(crate) fn from_str(s: &str) -> Self {
+				pub fn from_str(s: &str) -> Self {
 					let s = if s.as_bytes().contains(&0) {
 						std::borrow::Cow::Owned(make_nonnull(s))
 					} else {
@@ -12248,49 +13471,60 @@ pub mod sqlite3
 
 			const NUL_REPLACE: &str = "␀";
 
-			#[cold]
-			fn make_nonnull(v: &str) -> String {
+			#[cold] fn make_nonnull(v: &str) -> String
+            {
 				v.replace('\0', NUL_REPLACE)
 			}
 
-			impl Drop for SqliteMallocString {
+			impl Drop for SqliteMallocString
+            {
 				#[inline]
 				fn drop(&mut self) {
 					unsafe { ffi::sqlite3_free(self.ptr.as_ptr().cast()) };
 				}
 			}
 
-		}
+		} pub use self::sqlite_string::{alloc, SqliteMallocString};
 		
-		pub enum Named<'a> {
+		pub enum Named<'a>
+        {
 			Small(SmallCString),
 			C(&'a CStr),
 		}
 		
-		impl std::ops::Deref for Named<'_> {
+		impl ::ops::Deref for Named<'_>
+        {
 			type Target = CStr;
-			#[inline] fn deref(&self) -> &CStr {
-				match self {
+			
+            #[inline] fn deref(&self) -> &CStr
+            {
+				match self
+                {
 					Named::Small(s) => s.as_cstr(),
 					Named::C(s) => s,
 				}
 			}
 		}
-
 		/// Database, table, column, collation, function, module, vfs name
-		pub trait Name: std::fmt::Debug {
+		pub trait Name: ::fmt::Debug
+        {
 			/// As C string
 			fn as_cstr(&self) -> Result<Named<'_>>;
 		}
-		impl Name for &str {
+		
+        impl Name for &str
+        {
 			fn as_cstr(&self) -> Result<Named<'_>>
             {
 				let ss = SmallCString::new(self)?;
 				Ok(Named::Small(ss))
 			}
 		}
-		impl Name for &CStr {
-			#[inline] fn as_cstr(&self) -> Result<Named<'_>> {
+		
+        impl Name for &CStr
+        {
+			#[inline] fn as_cstr(&self) -> Result<Named<'_>>
+            {
 				Ok(Named::C(self))
 			}
 		}
@@ -12449,7 +13683,7 @@ pub mod sqlite3
 		/// Returns the path to the database file, if one exists and is known.
 		#[inline] pub fn path(&self) -> Option<&str>
         {
-			unsafe { crate::inner_connection::db_filename(::marker::PhantomData, self.handle(), MAIN_DB) }
+			unsafe { inner_connection::db_filename(::marker::PhantomData, self.handle(), MAIN_DB) }
 		}
 		/// Attempts to free as much heap memory as possible from the database connection.
 		#[inline] pub fn release_memory(&self) -> Result<()> { self.db.borrow_mut().release_memory() }
@@ -12505,12 +13739,12 @@ pub mod sqlite3
 			r.map_err(move |err| (self, err))
 		}
 		/// Get access to the underlying SQLite database connection handle.
-		#[inline] pub unsafe fn handle(&self) -> *mut ffi::sqlite3
+		#[inline] pub unsafe fn handle(&self) -> *mut sqlite3
         {
 			self.db.borrow().db()
 		}
 		/// Create a `Connection` from a raw handle.
-		#[inline] pub unsafe fn from_handle(db: *mut ffi::sqlite3) -> Result<Self>
+		#[inline] pub unsafe fn from_handle(db: *mut sqlite3) -> Result<Self>
         {
 			let db = InnerConnection::new(db, false);
 			Ok(Self {
@@ -12520,7 +13754,7 @@ pub mod sqlite3
 			})
 		}
 		/// Create a `Connection` from a raw owned handle.
-		#[inline] pub unsafe fn from_handle_owned(db: *mut ffi::sqlite3) -> Result<Self>
+		#[inline] pub unsafe fn from_handle_owned(db: *mut sqlite3) -> Result<Self>
         {
 			let db = InnerConnection::new(db, true);
 			Ok(Self
@@ -12592,7 +13826,7 @@ pub mod sqlite3
 		pub fn new(conn: &'conn Connection, sql: &'sql str) -> Self
         { Batch { conn, sql, tail: 0 } }
 	}
-	impl<'conn> fallible_iterator::FallibleIterator for Batch<'conn, '_>
+	impl<'conn> fallible::iterator::FallibleIterator for Batch<'conn, '_>
     {
 		type Error = Error;
 		type Item = Statement<'conn>;
@@ -12621,7 +13855,7 @@ pub mod sqlite3
 		}
 	}
 
-	bitflags::bitflags!
+	bitflags!
     {
 		/// Flags for opening SQLite database connections.
 		#[repr(C)] #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -12664,7 +13898,7 @@ pub mod sqlite3
 		}
 	}
 
-	bitflags::bitflags!
+	bitflags!
     {
 		/// Prepare flags.
 		#[repr(C)] #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -12681,7 +13915,7 @@ pub mod sqlite3
 	/// Allows interrupting a long-running computation.
 	pub struct InterruptHandle
     {
-		db_lock: Arc<Mutex<*mut ffi::sqlite3>>,
+		db_lock: Arc<Mutex<*mut sqlite3>>,
 	}
 
 	unsafe impl Send for InterruptHandle {}
