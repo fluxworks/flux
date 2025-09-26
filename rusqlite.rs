@@ -242,27 +242,25 @@ pub mod __
 				fn symmetric_difference($symmetric_difference0:ident, $symmetric_difference1:ident) $symmetric_difference:block
 				fn complement($complement0:ident) $complement:block
 			}
-		) => {
+		) =>
+        {
 			#[allow(dead_code, deprecated, unused_attributes)]
 			$(#[$outer])*
 			impl $PublicBitFlags {
 				/// Get a flags value with all bits unset.
-				#[inline]
-				pub const fn empty() -> Self {
+				#[inline] pub const fn empty() -> Self {
 					$empty
 				}
 
 				/// Get a flags value with all known bits set.
-				#[inline]
-				pub const fn all() -> Self {
+				#[inline] pub const fn all() -> Self {
 					$all
 				}
 
 				/// Get the underlying bits value.
 				///
 				/// The returned value is exactly the bits set in this flags value.
-				#[inline]
-				pub const fn bits(&self) -> $T {
+				#[inline] pub const fn bits(&self) -> $T {
 					let $bits0 = self;
 					$bits
 				}
@@ -270,22 +268,19 @@ pub mod __
 				/// Convert from a bits value.
 				///
 				/// This method will return `None` if any unknown bits are set.
-				#[inline]
-				pub const fn from_bits(bits: $T) -> ::option::Option<Self> {
+				#[inline] pub const fn from_bits(bits: $T) -> ::option::Option<Self> {
 					let $from_bits0 = bits;
 					$from_bits
 				}
 
 				/// Convert from a bits value, unsetting any unknown bits.
-				#[inline]
-				pub const fn from_bits_truncate(bits: $T) -> Self {
+				#[inline] pub const fn from_bits_truncate(bits: $T) -> Self {
 					let $from_bits_truncate0 = bits;
 					$from_bits_truncate
 				}
 
 				/// Convert from a bits value exactly.
-				#[inline]
-				pub const fn from_bits_retain(bits: $T) -> Self {
+				#[inline] pub const fn from_bits_retain(bits: $T) -> Self {
 					let $from_bits_retain0 = bits;
 					$from_bits_retain
 				}
@@ -294,45 +289,39 @@ pub mod __
 				///
 				/// This method will return `None` if `name` is empty or doesn't
 				/// correspond to any named flag.
-				#[inline]
-				pub fn from_name(name: &str) -> ::option::Option<Self> {
+				#[inline] pub fn from_name(name: &str) -> ::option::Option<Self> {
 					let $from_name0 = name;
 					$from_name
 				}
 
 				/// Whether all bits in this flags value are unset.
-				#[inline]
-				pub const fn is_empty(&self) -> bool {
+				#[inline] pub const fn is_empty(&self) -> bool {
 					let $is_empty0 = self;
 					$is_empty
 				}
 
 				/// Whether all known bits in this flags value are set.
-				#[inline]
-				pub const fn is_all(&self) -> bool {
+				#[inline] pub const fn is_all(&self) -> bool {
 					let $is_all0 = self;
 					$is_all
 				}
 
 				/// Whether any set bits in a source flags value are also set in a target flags value.
-				#[inline]
-				pub const fn intersects(&self, other: Self) -> bool {
+				#[inline] pub const fn intersects(&self, other: Self) -> bool {
 					let $intersects0 = self;
 					let $intersects1 = other;
 					$intersects
 				}
 
 				/// Whether all set bits in a source flags value are also set in a target flags value.
-				#[inline]
-				pub const fn contains(&self, other: Self) -> bool {
+				#[inline] pub const fn contains(&self, other: Self) -> bool {
 					let $contains0 = self;
 					let $contains1 = other;
 					$contains
 				}
 
 				/// The bitwise or (`|`) of the bits in two flags values.
-				#[inline]
-				pub fn insert(&mut self, other: Self) {
+				#[inline] pub fn insert(&mut self, other: Self) {
 					let $insert0 = self;
 					let $insert1 = other;
 					$insert
@@ -342,24 +331,21 @@ pub mod __
 				///
 				/// This method is not equivalent to `self & !other` when `other` has unknown bits set.
 				/// `remove` won't truncate `other`, but the `!` operator will.
-				#[inline]
-				pub fn remove(&mut self, other: Self) {
+				#[inline] pub fn remove(&mut self, other: Self) {
 					let $remove0 = self;
 					let $remove1 = other;
 					$remove
 				}
 
 				/// The bitwise exclusive-or (`^`) of the bits in two flags values.
-				#[inline]
-				pub fn toggle(&mut self, other: Self) {
+				#[inline] pub fn toggle(&mut self, other: Self) {
 					let $toggle0 = self;
 					let $toggle1 = other;
 					$toggle
 				}
 
 				/// Call `insert` when `value` is `true` or `remove` when `value` is `false`.
-				#[inline]
-				pub fn set(&mut self, other: Self, value: bool) {
+				#[inline] pub fn set(&mut self, other: Self, value: bool) {
 					let $set0 = self;
 					let $set1 = other;
 					let $set2 = value;
@@ -943,8 +929,7 @@ pub mod __
 				///
 				/// Each yielded flags value will correspond to a defined named flag. Any unknown bits
 				/// will be yielded together as a final flags value.
-				#[inline]
-				pub const fn iter(&self) -> $crate::iter::Iter<$PublicBitFlags> {
+				#[inline] pub const fn iter(&self) -> $crate::iter::Iter<$PublicBitFlags> {
 					$crate::iter::Iter::__private_const_new(
 						<$PublicBitFlags as $crate::Flags>::FLAGS,
 						$PublicBitFlags::from_bits_retain(self.bits()),
@@ -956,8 +941,7 @@ pub mod __
 				///
 				/// This method is like [`iter`](#method.iter), except only yields bits in contained named flags.
 				/// Any unknown bits, or bits not corresponding to a contained flag will not be yielded.
-				#[inline]
-				pub const fn iter_names(&self) -> $crate::iter::IterNames<$PublicBitFlags> {
+				#[inline] pub const fn iter_names(&self) -> $crate::iter::IterNames<$PublicBitFlags> {
 					$crate::iter::IterNames::__private_const_new(
 						<$PublicBitFlags as $crate::Flags>::FLAGS,
 						$PublicBitFlags::from_bits_retain(self.bits()),
@@ -1034,8 +1018,7 @@ pub mod __
 				type Output = Self;
 
 				/// The bitwise or (`|`) of the bits in two flags values.
-				#[inline]
-				fn bitor(self, other: $PublicBitFlags) -> Self {
+				#[inline] fn bitor(self, other: $PublicBitFlags) -> Self {
 					self.union(other)
 				}
 			}
@@ -1043,8 +1026,7 @@ pub mod __
 			$(#[$outer])*
 			impl ::ops::BitOrAssign for $PublicBitFlags {
 				/// The bitwise or (`|`) of the bits in two flags values.
-				#[inline]
-				fn bitor_assign(&mut self, other: Self) {
+				#[inline] fn bitor_assign(&mut self, other: Self) {
 					self.insert(other);
 				}
 			}
@@ -1054,8 +1036,7 @@ pub mod __
 				type Output = Self;
 
 				/// The bitwise exclusive-or (`^`) of the bits in two flags values.
-				#[inline]
-				fn bitxor(self, other: Self) -> Self {
+				#[inline] fn bitxor(self, other: Self) -> Self {
 					self.symmetric_difference(other)
 				}
 			}
@@ -1063,8 +1044,7 @@ pub mod __
 			$(#[$outer])*
 			impl ::ops::BitXorAssign for $PublicBitFlags {
 				/// The bitwise exclusive-or (`^`) of the bits in two flags values.
-				#[inline]
-				fn bitxor_assign(&mut self, other: Self) {
+				#[inline] fn bitxor_assign(&mut self, other: Self) {
 					self.toggle(other);
 				}
 			}
@@ -1074,8 +1054,7 @@ pub mod __
 				type Output = Self;
 
 				/// The bitwise and (`&`) of the bits in two flags values.
-				#[inline]
-				fn bitand(self, other: Self) -> Self {
+				#[inline] fn bitand(self, other: Self) -> Self {
 					self.intersection(other)
 				}
 			}
@@ -1083,8 +1062,7 @@ pub mod __
 			$(#[$outer])*
 			impl ::ops::BitAndAssign for $PublicBitFlags {
 				/// The bitwise and (`&`) of the bits in two flags values.
-				#[inline]
-				fn bitand_assign(&mut self, other: Self) {
+				#[inline] fn bitand_assign(&mut self, other: Self) {
 					*self = Self::from_bits_retain(self.bits()).intersection(other);
 				}
 			}
@@ -1097,8 +1075,7 @@ pub mod __
 				///
 				/// This method is not equivalent to `self & !other` when `other` has unknown bits set.
 				/// `difference` won't truncate `other`, but the `!` operator will.
-				#[inline]
-				fn sub(self, other: Self) -> Self {
+				#[inline] fn sub(self, other: Self) -> Self {
 					self.difference(other)
 				}
 			}
@@ -1109,8 +1086,7 @@ pub mod __
 				///
 				/// This method is not equivalent to `self & !other` when `other` has unknown bits set.
 				/// `difference` won't truncate `other`, but the `!` operator will.
-				#[inline]
-				fn sub_assign(&mut self, other: Self) {
+				#[inline] fn sub_assign(&mut self, other: Self) {
 					self.remove(other);
 				}
 			}
@@ -1120,8 +1096,7 @@ pub mod __
 				type Output = Self;
 
 				/// The bitwise negation (`!`) of the bits in a flags value, truncating the result.
-				#[inline]
-				fn not(self) -> Self {
+				#[inline] fn not(self) -> Self {
 					self.complement()
 				}
 			}
@@ -1257,6 +1232,11 @@ pub mod cmp
 	pub use std::cmp::{ * };
 }
 
+pub mod collections
+{
+	pub use std::collections::{ * };
+}
+
 pub mod convert
 {
 	pub use std::convert::{ * };
@@ -1317,37 +1297,23 @@ pub mod fallible
 				type Error;
 
 				/// Advances the iterator to the next position.
-				///
-				/// Iterators start just before the first item, so this method should be called before `get`
-				/// when iterating.
-				///
-				/// The behavior of calling this method after `get` has returned `None`, or after this method
-				/// has returned an error is unspecified.
 				fn advance(&mut self) -> Result<(), Self::Error>;
-
 				/// Returns the current element.
-				///
-				/// The behavior of calling this method before any calls to `advance` is unspecified.
 				fn get(&self) -> Option<&Self::Item>;
-
 				/// Advances the iterator, returning the next element.
-				///
-				/// The default implementation simply calls `advance` followed by `get`.
-				#[inline]
-				fn next(&mut self) -> Result<Option<&Self::Item>, Self::Error> {
+				#[inline] fn next(&mut self) -> Result<Option<&Self::Item>, Self::Error>
+                {
 					self.advance()?;
 					Ok(self.get())
 				}
 
 				/// Returns bounds on the number of remaining elements in the iterator.
-				#[inline]
-				fn size_hint(&self) -> (usize, Option<usize>) {
+				#[inline] fn size_hint(&self) -> (usize, Option<usize>) {
 					(0, None)
 				}
 
 				/// Determines if all elements of the iterator satisfy a predicate.
-				#[inline]
-				fn all<F>(&mut self, mut f: F) -> Result<bool, Self::Error>
+				#[inline] fn all<F>(&mut self, mut f: F) -> Result<bool, Self::Error>
 					where Self: Sized,
 						  F: FnMut(&Self::Item) -> bool
 				{
@@ -1360,8 +1326,7 @@ pub mod fallible
 				}
 
 				/// Determines if any elements of the iterator satisfy a predicate.
-				#[inline]
-				fn any<F>(&mut self, mut f: F) -> Result<bool, Self::Error>
+				#[inline] fn any<F>(&mut self, mut f: F) -> Result<bool, Self::Error>
 					where Self: Sized,
 						  F: FnMut(&Self::Item) -> bool
 				{
@@ -1372,16 +1337,14 @@ pub mod fallible
 				///
 				/// This is useful to allow the application of iterator adaptors while still retaining ownership
 				/// of the original adaptor.
-				#[inline]
-				fn by_ref(&mut self) -> &mut Self
+				#[inline] fn by_ref(&mut self) -> &mut Self
 					where Self: Sized
 				{
 					self
 				}
 
 				/// Returns the number of remaining elements in the iterator.
-				#[inline]
-				fn count(mut self) -> Result<usize, Self::Error>
+				#[inline] fn count(mut self) -> Result<usize, Self::Error>
 					where Self: Sized
 				{
 					let mut count = 0;
@@ -1392,8 +1355,7 @@ pub mod fallible
 				}
 
 				/// Returns an iterator which filters elements by a predicate.
-				#[inline]
-				fn filter<F>(self, f: F) -> Filter<Self, F>
+				#[inline] fn filter<F>(self, f: F) -> Filter<Self, F>
 					where Self: Sized,
 						  F: FnMut(&Self::Item) -> bool
 				{
@@ -1404,8 +1366,7 @@ pub mod fallible
 				}
 
 				/// Returns the first element of the iterator which satisfies a predicate.
-				#[inline]
-				fn find<F>(&mut self, mut f: F) -> Result<Option<&Self::Item>, Self::Error>
+				#[inline] fn find<F>(&mut self, mut f: F) -> Result<Option<&Self::Item>, Self::Error>
 					where Self: Sized,
 						  F: FnMut(&Self::Item) -> bool
 				{
@@ -1424,8 +1385,7 @@ pub mod fallible
 				}
 
 				/// Returns an iterator which is well-behaved at the beginning and end of iteration.
-				#[inline]
-				fn fuse(self) -> Fuse<Self>
+				#[inline] fn fuse(self) -> Fuse<Self>
 					where Self: Sized
 				{
 					Fuse {
@@ -1435,8 +1395,7 @@ pub mod fallible
 				}
 
 				/// Returns an iterator which applies a transform to elements.
-				#[inline]
-				fn map<F, B>(self, f: F) -> Map<Self, F, B>
+				#[inline] fn map<F, B>(self, f: F) -> Map<Self, F, B>
 					where Self: Sized,
 						  F: FnMut(&Self::Item) -> B
 				{
@@ -1451,8 +1410,7 @@ pub mod fallible
 				///
 				/// Unlike `map`, the the closure provided to this method returns a reference into the original
 				/// value.
-				#[inline]
-				fn map_ref<F, B: ?Sized>(self, f: F) -> MapRef<Self, F>
+				#[inline] fn map_ref<F, B: ?Sized>(self, f: F) -> MapRef<Self, F>
 					where Self: Sized,
 						  F: Fn(&Self::Item) -> &B
 				{
@@ -1463,8 +1421,7 @@ pub mod fallible
 				}
 
 				/// Returns the `nth` element of the iterator.
-				#[inline]
-				fn nth(&mut self, n: usize) -> Result<Option<&Self::Item>, Self::Error> {
+				#[inline] fn nth(&mut self, n: usize) -> Result<Option<&Self::Item>, Self::Error> {
 					for _ in 0..n {
 						self.advance()?;
 						if let None = self.get() {
@@ -1475,8 +1432,7 @@ pub mod fallible
 				}
 
 				/// Returns the position of the first element matching a predicate.
-				#[inline]
-				fn position<F>(&mut self, mut f: F) -> Result<Option<usize>, Self::Error>
+				#[inline] fn position<F>(&mut self, mut f: F) -> Result<Option<usize>, Self::Error>
 					where Self: Sized,
 						  F: FnMut(&Self::Item) -> bool
 				{
@@ -1491,8 +1447,7 @@ pub mod fallible
 				}
 
 				/// Returns an iterator which skips the first `n` elements.
-				#[inline]
-				fn skip(self, n: usize) -> Skip<Self>
+				#[inline] fn skip(self, n: usize) -> Skip<Self>
 					where Self: Sized
 				{
 					Skip {
@@ -1502,8 +1457,7 @@ pub mod fallible
 				}
 
 				/// Returns an iterator which skips the first sequence of elements matching a predicate.
-				#[inline]
-				fn skip_while<F>(self, f: F) -> SkipWhile<Self, F>
+				#[inline] fn skip_while<F>(self, f: F) -> SkipWhile<Self, F>
 					where Self: Sized,
 						  F: FnMut(&Self::Item) -> bool
 				{
@@ -1515,8 +1469,7 @@ pub mod fallible
 				}
 
 				/// Returns an iterator which only returns the first `n` elements.
-				#[inline]
-				fn take(self, n: usize) -> Take<Self>
+				#[inline] fn take(self, n: usize) -> Take<Self>
 					where Self: Sized
 				{
 					Take {
@@ -1527,8 +1480,7 @@ pub mod fallible
 				}
 
 				/// Returns an iterator which only returns the first sequence of elements matching a predicate.
-				#[inline]
-				fn take_while<F>(self, f: F) -> TakeWhile<Self, F>
+				#[inline] fn take_while<F>(self, f: F) -> TakeWhile<Self, F>
 					where Self: Sized,
 						  F: FnMut(&Self::Item) -> bool
 				{
@@ -1553,8 +1505,8 @@ pub mod fallible
 				type Item = I::Item;
 				type Error = I::Error;
 
-				#[inline]
-				fn advance(&mut self) -> Result<(), I::Error> {
+				#[inline] fn advance(&mut self) -> Result<(), I::Error>
+                {
 					while let Some(i) = self.it.next()? {
 						if (self.f)(i) {
 							break;
@@ -1563,15 +1515,9 @@ pub mod fallible
 					Ok(())
 				}
 
-				#[inline]
-				fn get(&self) -> Option<&I::Item> {
-					self.it.get()
-				}
+				#[inline] fn get(&self) -> Option<&I::Item> { self.it.get() }
 
-				#[inline]
-				fn size_hint(&self) -> (usize, Option<usize>) {
-					(0, self.it.size_hint().1)
-				}
+				#[inline] fn size_hint(&self) -> (usize, Option<usize>) { (0, self.it.size_hint().1) }
 			}
 
 			#[derive(Copy, Clone)]
@@ -1593,8 +1539,7 @@ pub mod fallible
 				type Item = I::Item;
 				type Error = I::Error;
 
-				#[inline]
-				fn advance(&mut self) -> Result<(), I::Error> {
+				#[inline] fn advance(&mut self) -> Result<(), I::Error> {
 					match self.state {
 						FuseState::Start => {
 							match self.it.next() {
@@ -1621,21 +1566,18 @@ pub mod fallible
 					Ok(())
 				}
 
-				#[inline]
-				fn get(&self) -> Option<&I::Item> {
+				#[inline] fn get(&self) -> Option<&I::Item> {
 					match self.state {
 						FuseState::Middle => self.it.get(),
 						FuseState::Start | FuseState::End => None,
 					}
 				}
 
-				#[inline]
-				fn size_hint(&self) -> (usize, Option<usize>) {
+				#[inline] fn size_hint(&self) -> (usize, Option<usize>) {
 					self.it.size_hint()
 				}
 
-				#[inline]
-				fn next(&mut self) -> Result<Option<&I::Item>, I::Error> {
+				#[inline] fn next(&mut self) -> Result<Option<&I::Item>, I::Error> {
 					match self.state {
 						FuseState::Start => {
 							match self.it.next() {
@@ -1685,19 +1627,18 @@ pub mod fallible
 				type Item = B;
 				type Error = I::Error;
 
-				#[inline]
-				fn advance(&mut self) -> Result<(), I::Error> {
+				#[inline] fn advance(&mut self) -> Result<(), I::Error>
+                {
 					self.value = self.it.next()?.map(&mut self.f);
 					Ok(())
 				}
 
-				#[inline]
-				fn get(&self) -> Option<&B> {
+				#[inline] fn get(&self) -> Option<&B>
+                {
 					self.value.as_ref()
 				}
 
-				#[inline]
-				fn size_hint(&self) -> (usize, Option<usize>) {
+				#[inline] fn size_hint(&self) -> (usize, Option<usize>) {
 					self.it.size_hint()
 				}
 			}
@@ -1715,18 +1656,17 @@ pub mod fallible
 				type Item = B;
 				type Error = I::Error;
 
-				#[inline]
-				fn advance(&mut self) -> Result<(), I::Error> {
+				#[inline] fn advance(&mut self) -> Result<(), I::Error>
+                {
 					self.it.advance()
 				}
 
-				#[inline]
-				fn get(&self) -> Option<&B> {
+				#[inline] fn get(&self) -> Option<&B>
+                {
 					self.it.get().map(&self.f)
 				}
 
-				#[inline]
-				fn size_hint(&self) -> (usize, Option<usize>) {
+				#[inline] fn size_hint(&self) -> (usize, Option<usize>) {
 					self.it.size_hint()
 				}
 			}
@@ -1743,8 +1683,7 @@ pub mod fallible
 				type Item = I::Item;
 				type Error = I::Error;
 
-				#[inline]
-				fn advance(&mut self) -> Result<(), I::Error> {
+				#[inline] fn advance(&mut self) -> Result<(), I::Error> {
 					for _ in 0..self.n {
 						if let None = self.it.next()? {
 							return Ok(());
@@ -1754,13 +1693,12 @@ pub mod fallible
 					self.advance()
 				}
 
-				#[inline]
-				fn get(&self) -> Option<&I::Item> {
+				#[inline] fn get(&self) -> Option<&I::Item>
+                {
 					self.it.get()
 				}
 
-				#[inline]
-				fn size_hint(&self) -> (usize, Option<usize>) {
+				#[inline] fn size_hint(&self) -> (usize, Option<usize>) {
 					let hint = self.it.size_hint();
 					(hint.0.saturating_sub(self.n), hint.1.map(|h| h.saturating_sub(self.n)))
 				}
@@ -1780,8 +1718,8 @@ pub mod fallible
 				type Item = I::Item;
 				type Error = I::Error;
 
-				#[inline]
-				fn advance(&mut self) -> Result<(), I::Error> {
+				#[inline] fn advance(&mut self) -> Result<(), I::Error>
+                {
 					if !self.done {
 						self.done = true;
 						let f = &mut self.f;
@@ -1791,13 +1729,12 @@ pub mod fallible
 					}
 				}
 
-				#[inline]
-				fn get(&self) -> Option<&I::Item> {
+				#[inline] fn get(&self) -> Option<&I::Item>
+                {
 					self.it.get()
 				}
 
-				#[inline]
-				fn size_hint(&self) -> (usize, Option<usize>) {
+				#[inline] fn size_hint(&self) -> (usize, Option<usize>) {
 					let hint = self.it.size_hint();
 					if self.done {
 						hint
@@ -1820,8 +1757,8 @@ pub mod fallible
 				type Item = I::Item;
 				type Error = I::Error;
 
-				#[inline]
-				fn advance(&mut self) -> Result<(), I::Error> {
+				#[inline] fn advance(&mut self) -> Result<(), I::Error>
+                {
 					if self.n != 0 {
 						self.it.advance()?;
 						self.n -= 1;
@@ -1831,13 +1768,13 @@ pub mod fallible
 					Ok(())
 				}
 
-				#[inline]
-				fn get(&self) -> Option<&I::Item> {
+				#[inline] fn get(&self) -> Option<&I::Item>
+                {
 					if self.done { self.it.get() } else { None }
 				}
 
-				#[inline]
-				fn size_hint(&self) -> (usize, Option<usize>) {
+				#[inline] fn size_hint(&self) -> (usize, Option<usize>)
+                {
 					if self.done {
 						(0, Some(0))
 					} else {
@@ -1861,8 +1798,8 @@ pub mod fallible
 				type Item = I::Item;
 				type Error = I::Error;
 
-				#[inline]
-				fn advance(&mut self) -> Result<(), I::Error> {
+				#[inline] fn advance(&mut self) -> Result<(), I::Error>
+                {
 					if let Some(v) = self.it.next()? {
 						if !(self.f)(v) {
 							self.done = true;
@@ -1871,13 +1808,13 @@ pub mod fallible
 					Ok(())
 				}
 
-				#[inline]
-				fn get(&self) -> Option<&I::Item> {
+				#[inline] fn get(&self) -> Option<&I::Item>
+                {
 					if self.done { None } else { self.it.get() }
 				}
 
-				#[inline]
-				fn size_hint(&self) -> (usize, Option<usize>) {
+				#[inline] fn size_hint(&self) -> (usize, Option<usize>)
+                {
 					if self.done {
 						(0, Some(0))
 					} else {
@@ -1893,7 +1830,8 @@ pub mod fallible
 			Err(E),
 		}
 
-		impl<T, E> From<E> for FoldStop<T, E> {
+		impl<T, E> From<E> for FoldStop<T, E>
+        {
 			#[inline] fn from(e: E) -> FoldStop<T, E> {
 				FoldStop::Err(e)
 			}
@@ -1904,7 +1842,8 @@ pub mod fallible
 			fn unpack_fold(self) -> Result<T, E>;
 		}
 
-		impl<T, E> ResultExt<T, E> for Result<T, FoldStop<T, E>> {
+		impl<T, E> ResultExt<T, E> for Result<T, FoldStop<T, E>>
+        {
 			#[inline] fn unpack_fold(self) -> Result<T, E> {
 				match self {
 					Ok(v) => Ok(v),
@@ -1922,33 +1861,14 @@ pub mod fallible
 			type Error;
 
 			/// Advances the iterator and returns the next value.
-			///
-			/// Returns `Ok(None)` when iteration is finished.
-			///
-			/// The behavior of calling this method after a previous call has returned
-			/// `Ok(None)` or `Err` is implementation defined.
 			fn next(&mut self) -> Result<Option<Self::Item>, Self::Error>;
 
 			/// Returns bounds on the remaining length of the iterator.
-			///
-			/// Specifically, the first half of the returned tuple is a lower bound and
-			/// the second half is an upper bound.
-			///
-			/// For the upper bound, `None` indicates that the upper bound is either
-			/// unknown or larger than can be represented as a `usize`.
-			///
-			/// Both bounds assume that all remaining calls to `next` succeed. That is,
-			/// `next` could return an `Err` in fewer calls than specified by the lower
-			/// bound.
-			///
-			/// The default implementation returns `(0, None)`, which is correct for
-			/// any iterator.
 			#[inline] fn size_hint(&self) -> (usize, Option<usize>) {
 				(0, None)
 			}
 			/// Consumes the iterator, returning the number of remaining items.
-			#[inline] fn count(self) -> Result<usize, Self::Error>
-			where
+			#[inline] fn count(self) -> Result<usize, Self::Error> where
 				Self: Sized,
 			{
 				self.fold(0, |n, _| Ok(n + 1))
@@ -1956,8 +1876,7 @@ pub mod fallible
 
 			#[inline]
 			/// Sums the iterator elements.
-			fn sum<I>(self) -> Result<I, Self::Error>
-			where
+			fn sum<I>(self) -> Result<I, Self::Error> where
 				Self: Sized,
 				I: iter::Sum<Self::Item>,
 			{
@@ -1966,23 +1885,22 @@ pub mod fallible
 
 			#[inline]
 			/// Returns the iterator elements product.
-			fn product<I>(self) -> Result<I, Self::Error>
-			where
+			fn product<I>(self) -> Result<I, Self::Error> where
 				Self: Sized,
 				I: iter::Product<Self::Item>,
 			{
 				iter::Product::product(self.iterator())
 			}
 			/// Returns the last element of the iterator.
-			#[inline] fn last(self) -> Result<Option<Self::Item>, Self::Error>
-			where
+			#[inline] fn last(self) -> Result<Option<Self::Item>, Self::Error> where
 				Self: Sized,
 			{
 				self.fold(None, |_, v| Ok(Some(v)))
 			}
 			/// Returns the `n`th element of the iterator.
 			#[inline] fn nth(&mut self, mut n: usize) -> Result<Option<Self::Item>, Self::Error> {
-				while let Some(e) = self.next()? {
+				while let Some(e) = self.next()?
+                {
 					if n == 0 {
 						return Ok(Some(e));
 					}
@@ -1991,12 +1909,7 @@ pub mod fallible
 				Ok(None)
 			}
 			/// Returns an iterator starting at the same point, but stepping by the given amount at each iteration.
-			///
-			/// # Panics
-			///
-			/// Panics if `step` is 0.
-			#[inline] fn step_by(self, step: usize) -> StepBy<Self>
-			where
+			#[inline] fn step_by(self, step: usize) -> StepBy<Self> where
 				Self: Sized,
 			{
 				assert!(step != 0);
@@ -2008,8 +1921,7 @@ pub mod fallible
 			}
 			/// Returns an iterator which yields the elements of this iterator followed
 			/// by another.
-			#[inline] fn chain<I>(self, it: I) -> Chain<Self, I>
-			where
+			#[inline] fn chain<I>(self, it: I) -> Chain<Self, I> where
 				I: IntoFallibleIterator<Item = Self::Item, Error = Self::Error>,
 				Self: Sized,
 			{
@@ -2021,8 +1933,7 @@ pub mod fallible
 			}
 			/// Returns an iterator that yields pairs of this iterator's and another
 			/// iterator's values.
-			#[inline] fn zip<I>(self, o: I) -> Zip<Self, I::IntoFallibleIter>
-			where
+			#[inline] fn zip<I>(self, o: I) -> Zip<Self, I::IntoFallibleIter> where
 				Self: Sized,
 				I: IntoFallibleIterator<Error = Self::Error>,
 			{
@@ -2030,16 +1941,14 @@ pub mod fallible
 			}
 			/// Returns an iterator which applies a fallible transform to the elements
 			/// of the underlying iterator.
-			#[inline] fn map<F, B>(self, f: F) -> Map<Self, F>
-			where
+			#[inline] fn map<F, B>(self, f: F) -> Map<Self, F> where
 				Self: Sized,
 				F: FnMut(Self::Item) -> Result<B, Self::Error>,
 			{
 				Map { it: self, f }
 			}
 			/// Calls a fallible closure on each element of an iterator.
-			#[inline] fn for_each<F>(self, mut f: F) -> Result<(), Self::Error>
-			where
+			#[inline] fn for_each<F>(self, mut f: F) -> Result<(), Self::Error> where
 				Self: Sized,
 				F: FnMut(Self::Item) -> Result<(), Self::Error>,
 			{
@@ -2048,8 +1957,7 @@ pub mod fallible
 			/// Returns an iterator which uses a predicate to determine which values
 			/// should be yielded. The predicate may fail; such failures are passed to
 			/// the caller.
-			#[inline] fn filter<F>(self, f: F) -> Filter<Self, F>
-			where
+			#[inline] fn filter<F>(self, f: F) -> Filter<Self, F> where
 				Self: Sized,
 				F: FnMut(&Self::Item) -> Result<bool, Self::Error>,
 			{
@@ -2057,8 +1965,7 @@ pub mod fallible
 			}
 			/// Returns an iterator which both filters and maps. The closure may fail;
 			/// such failures are passed along to the consumer.
-			#[inline] fn filter_map<B, F>(self, f: F) -> FilterMap<Self, F>
-			where
+			#[inline] fn filter_map<B, F>(self, f: F) -> FilterMap<Self, F> where
 				Self: Sized,
 				F: FnMut(Self::Item) -> Result<Option<B>, Self::Error>,
 			{
@@ -2066,16 +1973,14 @@ pub mod fallible
 			}
 			/// Returns an iterator which yields the current iteration count as well
 			/// as the value.
-			#[inline] fn enumerate(self) -> Enumerate<Self>
-			where
+			#[inline] fn enumerate(self) -> Enumerate<Self> where
 				Self: Sized,
 			{
 				Enumerate { it: self, n: 0 }
 			}
 			/// Returns an iterator that can peek at the next element without consuming
 			/// it.
-			#[inline] fn peekable(self) -> Peekable<Self>
-			where
+			#[inline] fn peekable(self) -> Peekable<Self> where
 				Self: Sized,
 			{
 				Peekable {
@@ -2084,8 +1989,7 @@ pub mod fallible
 				}
 			}
 			/// Returns an iterator that skips elements based on a predicate.
-			#[inline] fn skip_while<P>(self, predicate: P) -> SkipWhile<Self, P>
-			where
+			#[inline] fn skip_while<P>(self, predicate: P) -> SkipWhile<Self, P> where
 				Self: Sized,
 				P: FnMut(&Self::Item) -> Result<bool, Self::Error>,
 			{
@@ -2096,8 +2000,7 @@ pub mod fallible
 				}
 			}
 			/// Returns an iterator that yields elements based on a predicate.
-			#[inline] fn take_while<P>(self, predicate: P) -> TakeWhile<Self, P>
-			where
+			#[inline] fn take_while<P>(self, predicate: P) -> TakeWhile<Self, P> where
 				Self: Sized,
 				P: FnMut(&Self::Item) -> Result<bool, Self::Error>,
 			{
@@ -2108,16 +2011,14 @@ pub mod fallible
 				}
 			}
 			/// Returns an iterator which skips the first `n` values of this iterator.
-			#[inline] fn skip(self, n: usize) -> Skip<Self>
-			where
+			#[inline] fn skip(self, n: usize) -> Skip<Self> where
 				Self: Sized,
 			{
 				Skip { it: self, n }
 			}
 			/// Returns an iterator that yields only the first `n` values of this
 			/// iterator.
-			#[inline] fn take(self, n: usize) -> Take<Self>
-			where
+			#[inline] fn take(self, n: usize) -> Take<Self> where
 				Self: Sized,
 			{
 				Take {
@@ -2127,8 +2028,7 @@ pub mod fallible
 			}
 			/// Returns an iterator which applies a stateful map to values of this
 			/// iterator.
-			#[inline] fn scan<St, B, F>(self, initial_state: St, f: F) -> Scan<Self, St, F>
-			where
+			#[inline] fn scan<St, B, F>(self, initial_state: St, f: F) -> Scan<Self, St, F> where
 				Self: Sized,
 				F: FnMut(&mut St, Self::Item) -> Result<Option<B>, Self::Error>,
 			{
@@ -2139,8 +2039,7 @@ pub mod fallible
 				}
 			}
 			/// Returns an iterator which maps this iterator's elements to iterators, yielding those iterators' values.
-			#[inline] fn flat_map<U, F>(self, f: F) -> FlatMap<Self, U, F>
-			where
+			#[inline] fn flat_map<U, F>(self, f: F) -> FlatMap<Self, U, F> where
 				Self: Sized,
 				U: IntoFallibleIterator<Error = Self::Error>,
 				F: FnMut(Self::Item) -> Result<U, Self::Error>,
@@ -2151,8 +2050,7 @@ pub mod fallible
 				}
 			}
 			/// Returns an iterator which flattens an iterator of iterators, yielding those iterators' values.
-			#[inline] fn flatten(self) -> Flatten<Self>
-			where
+			#[inline] fn flatten(self) -> Flatten<Self> where
 				Self: Sized,
 				Self::Item: IntoFallibleIterator<Error = Self::Error>,
 			{
@@ -2163,12 +2061,7 @@ pub mod fallible
 			}
 			/// Returns an iterator which yields this iterator's elements and ends after
 			/// the first `Ok(None)`.
-			///
-			/// The behavior of calling `next` after it has previously returned
-			/// `Ok(None)` is normally unspecified. The iterator returned by this method
-			/// guarantees that `Ok(None)` will always be returned.
-			#[inline] fn fuse(self) -> Fuse<Self>
-			where
+			#[inline] fn fuse(self) -> Fuse<Self> where
 				Self: Sized,
 			{
 				Fuse {
@@ -2177,17 +2070,13 @@ pub mod fallible
 				}
 			}
 			/// Returns an iterator which passes each element to a closure before returning it.
-			#[inline] fn inspect<F>(self, f: F) -> Inspect<Self, F>
-			where
+			#[inline] fn inspect<F>(self, f: F) -> Inspect<Self, F> where
 				Self: Sized,
 				F: FnMut(&Self::Item) -> Result<(), Self::Error>,
 			{
 				Inspect { it: self, f }
 			}
 			/// Borrow an iterator rather than consuming it.
-			///
-			/// This is useful to allow the use of iterator adaptors that would
-			/// otherwise consume the value.
 			#[inline] fn by_ref(&mut self) -> &mut Self
 			where
 				Self: Sized,
@@ -2195,18 +2084,14 @@ pub mod fallible
 				self
 			}
 			/// Transforms the iterator into a collection.
-			///
-			/// An `Err` will be returned if any invocation of `next` returns `Err`.
-			#[inline] fn collect<T>(self) -> Result<T, Self::Error>
-			where
+			#[inline] fn collect<T>(self) -> Result<T, Self::Error> where
 				T: iter::FromIterator<Self::Item>,
 				Self: Sized,
 			{
 				self.iterator().collect()
 			}
 			/// Transforms the iterator into two collections, partitioning elements by a closure.
-			#[inline] fn partition<B, F>(self, mut f: F) -> Result<(B, B), Self::Error>
-			where
+			#[inline] fn partition<B, F>(self, mut f: F) -> Result<(B, B), Self::Error> where
 				Self: Sized,
 				B: Default + Extend<Self::Item>,
 				F: FnMut(&Self::Item) -> Result<bool, Self::Error>,
@@ -2214,7 +2099,8 @@ pub mod fallible
 				let mut a = B::default();
 				let mut b = B::default();
 
-				self.for_each(|i| {
+				self.for_each(|i|
+                {
 					if f(&i)? {
 						a.extend(Some(i));
 					} else {
@@ -2227,18 +2113,14 @@ pub mod fallible
 			}
 			/// Applies a function over the elements of the iterator, producing a single
 			/// final value.
-			#[inline] fn fold<B, F>(mut self, init: B, f: F) -> Result<B, Self::Error>
-			where
+			#[inline] fn fold<B, F>(mut self, init: B, f: F) -> Result<B, Self::Error> where
 				Self: Sized,
 				F: FnMut(B, Self::Item) -> Result<B, Self::Error>,
 			{
 				self.try_fold(init, f)
 			}
 			/// Applies a function over the elements of the iterator, producing a single final value.
-			///
-			/// This is used as the "base" of many methods on `FallibleIterator`.
-			#[inline] fn try_fold<B, E, F>(&mut self, mut init: B, mut f: F) -> Result<B, E>
-			where
+			#[inline] fn try_fold<B, E, F>(&mut self, mut init: B, mut f: F) -> Result<B, E> where
 				Self: Sized,
 				E: From<Self::Error>,
 				F: FnMut(B, Self::Item) -> Result<B, E>,
@@ -2249,12 +2131,12 @@ pub mod fallible
 				Ok(init)
 			}
 			/// Determines if all elements of this iterator match a predicate.
-			#[inline] fn all<F>(&mut self, mut f: F) -> Result<bool, Self::Error>
-			where
+			#[inline] fn all<F>(&mut self, mut f: F) -> Result<bool, Self::Error> where
 				Self: Sized,
 				F: FnMut(Self::Item) -> Result<bool, Self::Error>,
 			{
-				self.try_fold((), |(), v| {
+				self.try_fold((), |(), v|
+                {
 					if !f(v)? {
 						return Err(FoldStop::Break(false));
 					}
@@ -2264,12 +2146,12 @@ pub mod fallible
 				.unpack_fold()
 			}
 			/// Determines if any element of this iterator matches a predicate.
-			#[inline] fn any<F>(&mut self, mut f: F) -> Result<bool, Self::Error>
-			where
+			#[inline] fn any<F>(&mut self, mut f: F) -> Result<bool, Self::Error> where
 				Self: Sized,
 				F: FnMut(Self::Item) -> Result<bool, Self::Error>,
 			{
-				self.try_fold((), |(), v| {
+				self.try_fold((), |(), v|
+                {
 					if f(v)? {
 						return Err(FoldStop::Break(true));
 					}
@@ -2279,12 +2161,12 @@ pub mod fallible
 				.unpack_fold()
 			}
 			/// Returns the first element of the iterator that matches a predicate.
-			#[inline] fn find<F>(&mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error>
-			where
+			#[inline] fn find<F>(&mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error> where
 				Self: Sized,
 				F: FnMut(&Self::Item) -> Result<bool, Self::Error>,
 			{
-				self.try_fold((), |(), v| {
+				self.try_fold((), |(), v|
+                {
 					if f(&v)? {
 						return Err(FoldStop::Break(Some(v)));
 					}
@@ -2294,22 +2176,20 @@ pub mod fallible
 				.unpack_fold()
 			}
 			/// Applies a function to the elements of the iterator, returning the first non-`None` result.
-			#[inline] fn find_map<B, F>(&mut self, f: F) -> Result<Option<B>, Self::Error>
-			where
+			#[inline] fn find_map<B, F>(&mut self, f: F) -> Result<Option<B>, Self::Error> where
 				Self: Sized,
 				F: FnMut(Self::Item) -> Result<Option<B>, Self::Error>,
 			{
 				self.filter_map(f).next()
 			}
 			/// Returns the position of the first element of this iterator that matches
-			/// a predicate. The predicate may fail; such failures are returned to the
-			/// caller.
-			#[inline] fn position<F>(&mut self, mut f: F) -> Result<Option<usize>, Self::Error>
-			where
+			/// a predicate.
+			#[inline] fn position<F>(&mut self, mut f: F) -> Result<Option<usize>, Self::Error> where
 				Self: Sized,
 				F: FnMut(Self::Item) -> Result<bool, Self::Error>,
 			{
-				self.try_fold(0, |n, v| {
+				self.try_fold(0, |n, v|
+                {
 					if f(v)? {
 						return Err(FoldStop::Break(Some(n)));
 					}
@@ -2319,8 +2199,7 @@ pub mod fallible
 				.unpack_fold()
 			}
 			/// Returns the maximal element of the iterator.
-			#[inline] fn max(self) -> Result<Option<Self::Item>, Self::Error>
-			where
+			#[inline] fn max(self) -> Result<Option<Self::Item>, Self::Error> where
 				Self: Sized,
 				Self::Item: Ord,
 			{
@@ -2328,8 +2207,7 @@ pub mod fallible
 			}
 			/// Returns the element of the iterator which gives the maximum value from
 			/// the function.
-			#[inline] fn max_by_key<B, F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error>
-			where
+			#[inline] fn max_by_key<B, F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error> where
 				Self: Sized,
 				B: Ord,
 				F: FnMut(&Self::Item) -> Result<B, Self::Error>,
@@ -2350,8 +2228,7 @@ pub mod fallible
 				.map(|v| Some(v.1))
 			}
 			/// Returns the element that gives the maximum value with respect to the function.
-			#[inline] fn max_by<F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error>
-			where
+			#[inline] fn max_by<F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error> where
 				Self: Sized,
 				F: FnMut(&Self::Item, &Self::Item) -> Result<Ordering, Self::Error>,
 			{
@@ -2360,7 +2237,8 @@ pub mod fallible
 					None => return Ok(None),
 				};
 
-				self.fold(max, |max, v| {
+				self.fold(max, |max, v|
+                {
 					if f(&max, &v)? == Ordering::Greater {
 						Ok(max)
 					} else {
@@ -2370,8 +2248,7 @@ pub mod fallible
 				.map(Some)
 			}
 			/// Returns the minimal element of the iterator.
-			#[inline] fn min(self) -> Result<Option<Self::Item>, Self::Error>
-			where
+			#[inline] fn min(self) -> Result<Option<Self::Item>, Self::Error> where
 				Self: Sized,
 				Self::Item: Ord,
 			{
@@ -2379,8 +2256,7 @@ pub mod fallible
 			}
 			/// Returns the element of the iterator which gives the minimum value from
 			/// the function.
-			#[inline] fn min_by_key<B, F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error>
-			where
+			#[inline] fn min_by_key<B, F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error> where
 				Self: Sized,
 				B: Ord,
 				F: FnMut(&Self::Item) -> Result<B, Self::Error>,
@@ -2401,8 +2277,7 @@ pub mod fallible
 				.map(|v| Some(v.1))
 			}
 			/// Returns the element that gives the minimum value with respect to the function.
-			#[inline] fn min_by<F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error>
-			where
+			#[inline] fn min_by<F>(mut self, mut f: F) -> Result<Option<Self::Item>, Self::Error> where
 				Self: Sized,
 				F: FnMut(&Self::Item, &Self::Item) -> Result<Ordering, Self::Error>,
 			{
@@ -2411,7 +2286,8 @@ pub mod fallible
 					None => return Ok(None),
 				};
 
-				self.fold(min, |min, v| {
+				self.fold(min, |min, v|
+                {
 					if f(&min, &v)? == Ordering::Less {
 						Ok(min)
 					} else {
@@ -2422,15 +2298,13 @@ pub mod fallible
 			}
 			/// Returns an iterator that yields this iterator's items in the opposite
 			/// order.
-			#[inline] fn rev(self) -> Rev<Self>
-			where
+			#[inline] fn rev(self) -> Rev<Self> where
 				Self: Sized + DoubleEndedFallibleIterator,
 			{
 				Rev(self)
 			}
 			/// Converts an iterator of pairs into a pair of containers.
-			#[inline] fn unzip<A, B, FromA, FromB>(self) -> Result<(FromA, FromB), Self::Error>
-			where
+			#[inline] fn unzip<A, B, FromA, FromB>(self) -> Result<(FromA, FromB), Self::Error> where
 				Self: Sized + FallibleIterator<Item = (A, B)>,
 				FromA: Default + Extend<A>,
 				FromB: Default + Extend<B>,
@@ -2447,16 +2321,14 @@ pub mod fallible
 				Ok((from_a, from_b))
 			}
 			/// Returns an iterator which clones all of its elements.
-			#[inline] fn cloned<'a, T>(self) -> Cloned<Self>
-			where
+			#[inline] fn cloned<'a, T>(self) -> Cloned<Self> where
 				Self: Sized + FallibleIterator<Item = &'a T>,
 				T: 'a + Clone,
 			{
 				Cloned(self)
 			}
 			/// Returns an iterator which repeats this iterator endlessly.
-			#[inline] fn cycle(self) -> Cycle<Self>
-			where
+			#[inline] fn cycle(self) -> Cycle<Self> where
 				Self: Sized + Clone,
 			{
 				Cycle {
@@ -2466,8 +2338,7 @@ pub mod fallible
 			}
 			/// Lexicographically compares the elements of this iterator to that of
 			/// another.
-			#[inline] fn cmp<I>(mut self, other: I) -> Result<Ordering, Self::Error>
-			where
+			#[inline] fn cmp<I>(mut self, other: I) -> Result<Ordering, Self::Error> where
 				Self: Sized,
 				I: IntoFallibleIterator<Item = Self::Item, Error = Self::Error>,
 				Self::Item: Ord,
@@ -2488,8 +2359,7 @@ pub mod fallible
 			}
 			/// Lexicographically compares the elements of this iterator to that of
 			/// another.
-			#[inline] fn partial_cmp<I>(mut self, other: I) -> Result<Option<Ordering>, Self::Error>
-			where
+			#[inline] fn partial_cmp<I>(mut self, other: I) -> Result<Option<Ordering>, Self::Error> where
 				Self: Sized,
 				I: IntoFallibleIterator<Error = Self::Error>,
 				Self::Item: PartialOrd<I::Item>,
@@ -2510,8 +2380,7 @@ pub mod fallible
 			}
 			/// Determines if the elements of this iterator are equal to those of
 			/// another.
-			#[inline] fn eq<I>(mut self, other: I) -> Result<bool, Self::Error>
-			where
+			#[inline] fn eq<I>(mut self, other: I) -> Result<bool, Self::Error> where
 				Self: Sized,
 				I: IntoFallibleIterator<Error = Self::Error>,
 				Self::Item: PartialEq<I::Item>,
@@ -2532,8 +2401,7 @@ pub mod fallible
 			}
 			/// Determines if the elements of this iterator are not equal to those of
 			/// another.
-			#[inline] fn ne<I>(mut self, other: I) -> Result<bool, Self::Error>
-			where
+			#[inline] fn ne<I>(mut self, other: I) -> Result<bool, Self::Error> where
 				Self: Sized,
 				I: IntoFallibleIterator<Error = Self::Error>,
 				Self::Item: PartialEq<I::Item>,
@@ -2554,8 +2422,7 @@ pub mod fallible
 			}
 			/// Determines if the elements of this iterator are lexicographically less
 			/// than those of another.
-			#[inline] fn lt<I>(mut self, other: I) -> Result<bool, Self::Error>
-			where
+			#[inline] fn lt<I>(mut self, other: I) -> Result<bool, Self::Error> where
 				Self: Sized,
 				I: IntoFallibleIterator<Error = Self::Error>,
 				Self::Item: PartialOrd<I::Item>,
@@ -2578,8 +2445,7 @@ pub mod fallible
 			}
 			/// Determines if the elements of this iterator are lexicographically less
 			/// than or equal to those of another.
-			#[inline] fn le<I>(mut self, other: I) -> Result<bool, Self::Error>
-			where
+			#[inline] fn le<I>(mut self, other: I) -> Result<bool, Self::Error> where
 				Self: Sized,
 				I: IntoFallibleIterator<Error = Self::Error>,
 				Self::Item: PartialOrd<I::Item>,
@@ -2602,8 +2468,7 @@ pub mod fallible
 			}
 			/// Determines if the elements of this iterator are lexicographically
 			/// greater than those of another.
-			#[inline] fn gt<I>(mut self, other: I) -> Result<bool, Self::Error>
-			where
+			#[inline] fn gt<I>(mut self, other: I) -> Result<bool, Self::Error> where
 				Self: Sized,
 				I: IntoFallibleIterator<Error = Self::Error>,
 				Self::Item: PartialOrd<I::Item>,
@@ -2626,8 +2491,7 @@ pub mod fallible
 			}
 			/// Determines if the elements of this iterator are lexicographically
 			/// greater than or equal to those of another.
-			#[inline] fn ge<I>(mut self, other: I) -> Result<bool, Self::Error>
-			where
+			#[inline] fn ge<I>(mut self, other: I) -> Result<bool, Self::Error> where
 				Self: Sized,
 				I: IntoFallibleIterator<Error = Self::Error>,
 				Self::Item: PartialOrd<I::Item>,
@@ -2649,24 +2513,21 @@ pub mod fallible
 				}
 			}
 			/// Returns a normal (non-fallible) iterator over `Result<Item, Error>`.
-			#[inline] fn iterator(self) -> Iterator<Self>
-			where
+			#[inline] fn iterator(self) -> Iterator<Self> where
 				Self: Sized,
 			{
 				Iterator(self)
 			}
 			/// Returns an iterator which applies a transform to the errors of the
 			/// underlying iterator.
-			#[inline] fn map_err<B, F>(self, f: F) -> MapErr<Self, F>
-			where
+			#[inline] fn map_err<B, F>(self, f: F) -> MapErr<Self, F> where
 				F: FnMut(Self::Error) -> B,
 				Self: Sized,
 			{
 				MapErr { it: self, f }
 			}
 			/// Returns an iterator which unwraps all of its elements.
-			#[inline] fn unwrap<T>(self) -> Unwrap<Self>
-			where
+			#[inline] fn unwrap<T>(self) -> Unwrap<Self> where
 				Self: Sized + FallibleIterator<Item = T>,
 				Self::Error: core::fmt::Debug,
 			{
@@ -2691,7 +2552,8 @@ pub mod fallible
 			}
 		}
 
-		impl<I: DoubleEndedFallibleIterator + ?Sized> DoubleEndedFallibleIterator for &mut I {
+		impl<I: DoubleEndedFallibleIterator + ?Sized> DoubleEndedFallibleIterator for &mut I
+        {
 			#[inline] fn next_back(&mut self) -> Result<Option<I::Item>, I::Error> {
 				(**self).next_back()
 			}
@@ -2714,7 +2576,8 @@ pub mod fallible
 			}
 		}
 
-		impl<I: DoubleEndedFallibleIterator + ?Sized> DoubleEndedFallibleIterator for Box<I> {
+		impl<I: DoubleEndedFallibleIterator + ?Sized> DoubleEndedFallibleIterator for Box<I>
+        {
 			#[inline] fn next_back(&mut self) -> Result<Option<I::Item>, I::Error> {
 				(**self).next_back()
 			}
@@ -2725,18 +2588,14 @@ pub mod fallible
 			fn next_back(&mut self) -> Result<Option<Self::Item>, Self::Error>;
 
 			/// Applies a function over the elements of the iterator in reverse order, producing a single final value.
-			#[inline] fn rfold<B, F>(mut self, init: B, f: F) -> Result<B, Self::Error>
-			where
+			#[inline] fn rfold<B, F>(mut self, init: B, f: F) -> Result<B, Self::Error> where
 				Self: Sized,
 				F: FnMut(B, Self::Item) -> Result<B, Self::Error>,
 			{
 				self.try_rfold(init, f)
 			}
 			/// Applies a function over the elements of the iterator in reverse, producing a single final value.
-			///
-			/// This is used as the "base" of many methods on `DoubleEndedFallibleIterator`.
-			#[inline] fn try_rfold<B, E, F>(&mut self, mut init: B, mut f: F) -> Result<B, E>
-			where
+			#[inline] fn try_rfold<B, E, F>(&mut self, mut init: B, mut f: F) -> Result<B, E> where
 				Self: Sized,
 				E: From<Self::Error>,
 				F: FnMut(B, Self::Item) -> Result<B, E>,
@@ -2808,8 +2667,7 @@ pub mod fallible
 				self.it.size_hint()
 			}
 
-			#[inline] fn try_fold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E>
-			where
+			#[inline] fn try_fold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E> where
 				E: From<T::Error>,
 				G: FnMut(C, B) -> Result<C, E>,
 			{
@@ -2830,8 +2688,7 @@ pub mod fallible
 				}
 			}
 
-			#[inline] fn try_rfold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E>
-			where
+			#[inline] fn try_rfold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E> where
 				E: From<I::Error>,
 				G: FnMut(C, B) -> Result<C, E>,
 			{
@@ -2896,8 +2753,7 @@ pub mod fallible
 				}
 			}
 
-			#[inline] fn try_fold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E>
-			where
+			#[inline] fn try_fold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E> where
 				E: From<T::Error>,
 				F: FnMut(B, T::Item) -> Result<B, E>,
 			{
@@ -2912,8 +2768,7 @@ pub mod fallible
 				}
 			}
 
-			#[inline] fn find<F>(&mut self, mut f: F) -> Result<Option<T::Item>, T::Error>
-			where
+			#[inline] fn find<F>(&mut self, mut f: F) -> Result<Option<T::Item>, T::Error> where
 				F: FnMut(&T::Item) -> Result<bool, T::Error>,
 			{
 				match self.state {
@@ -2959,8 +2814,7 @@ pub mod fallible
 				}
 			}
 
-			#[inline] fn try_rfold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E>
-			where
+			#[inline] fn try_rfold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E> where
 				E: From<T::Error>,
 				F: FnMut(B, T::Item) -> Result<B, E>,
 			{
@@ -2994,8 +2848,7 @@ pub mod fallible
 				self.0.size_hint()
 			}
 
-			#[inline] fn try_fold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E>
-			where
+			#[inline] fn try_fold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E> where
 				E: From<I::Error>,
 				F: FnMut(B, T) -> Result<B, E>,
 			{
@@ -3011,8 +2864,7 @@ pub mod fallible
 				self.0.next_back().map(|o| o.cloned())
 			}
 
-			#[inline] fn try_rfold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E>
-			where
+			#[inline] fn try_rfold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E> where
 				E: From<I::Error>,
 				F: FnMut(B, T) -> Result<B, E>,
 			{
@@ -3047,8 +2899,7 @@ pub mod fallible
 				self.0.size_hint()
 			}
 
-			#[inline] fn try_fold<B, E2, F>(&mut self, init: B, mut f: F) -> Result<B, E2>
-			where
+			#[inline] fn try_fold<B, E2, F>(&mut self, init: B, mut f: F) -> Result<B, E2> where
 				E2: From<E>,
 				F: FnMut(B, T) -> Result<B, E2>,
 			{
@@ -3067,8 +2918,7 @@ pub mod fallible
 				}
 			}
 
-			#[inline] fn try_rfold<B, E2, F>(&mut self, init: B, mut f: F) -> Result<B, E2>
-			where
+			#[inline] fn try_rfold<B, E2, F>(&mut self, init: B, mut f: F) -> Result<B, E2> where
 				E2: From<E>,
 				F: FnMut(B, T) -> Result<B, E2>,
 			{
@@ -3094,8 +2944,7 @@ pub mod fallible
 				self.0.size_hint()
 			}
 
-			#[inline] fn try_fold<B, E2, F>(&mut self, init: B, f: F) -> Result<B, E2>
-			where
+			#[inline] fn try_fold<B, E2, F>(&mut self, init: B, f: F) -> Result<B, E2> where
 				E2: From<Infallible>,
 				F: FnMut(B, T) -> Result<B, E2>,
 			{
@@ -3118,8 +2967,7 @@ pub mod fallible
 				Ok(self.0.next_back())
 			}
 
-			#[inline] fn try_rfold<B, E2, F>(&mut self, init: B, f: F) -> Result<B, E2>
-			where
+			#[inline] fn try_rfold<B, E2, F>(&mut self, init: B, f: F) -> Result<B, E2> where
 				E2: From<Infallible>,
 				F: FnMut(B, T) -> Result<B, E2>,
 			{
@@ -3169,8 +3017,7 @@ pub mod fallible
 				}
 			}
 
-			#[inline] fn try_fold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E>
-			where
+			#[inline] fn try_fold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E> where
 				E: From<I::Error>,
 				F: FnMut(B, (usize, I::Item)) -> Result<B, E>,
 			{
@@ -3215,8 +3062,7 @@ pub mod fallible
 				(0, self.it.size_hint().1)
 			}
 
-			#[inline] fn try_fold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E>
-			where
+			#[inline] fn try_fold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E> where
 				E: From<I::Error>,
 				G: FnMut(B, I::Item) -> Result<B, E>,
 			{
@@ -3252,8 +3098,7 @@ pub mod fallible
 					.unpack_fold()
 			}
 
-			#[inline] fn try_rfold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E>
-			where
+			#[inline] fn try_rfold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E> where
 				E: From<I::Error>,
 				G: FnMut(B, I::Item) -> Result<B, E>,
 			{
@@ -3301,8 +3146,7 @@ pub mod fallible
 				(0, self.it.size_hint().1)
 			}
 
-			#[inline] fn try_fold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E>
-			where
+			#[inline] fn try_fold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E> where
 				E: From<I::Error>,
 				G: FnMut(C, B) -> Result<C, E>,
 			{
@@ -3330,8 +3174,7 @@ pub mod fallible
 					.unpack_fold()
 			}
 
-			#[inline] fn try_rfold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E>
-			where
+			#[inline] fn try_rfold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E> where
 				E: From<I::Error>,
 				G: FnMut(C, B) -> Result<C, E>,
 			{
@@ -3360,7 +3203,8 @@ pub mod fallible
 			type Error = U::Error;
 
 			#[inline] fn next(&mut self) -> Result<Option<U::Item>, U::Error> {
-				loop {
+				loop
+                {
 					if let Some(it) = &mut self.cur {
 						if let Some(v) = it.next()? {
 							return Ok(Some(v));
@@ -3373,8 +3217,7 @@ pub mod fallible
 				}
 			}
 
-			#[inline] fn try_fold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E>
-			where
+			#[inline] fn try_fold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E> where
 				E: From<U::Error>,
 				G: FnMut(B, U::Item) -> Result<B, E>,
 			{
@@ -3427,7 +3270,8 @@ pub mod fallible
 			type Error = <I::Item as IntoFallibleIterator>::Error;
 
 			#[inline] fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-				loop {
+				loop
+                {
 					if let Some(it) = &mut self.cur {
 						if let Some(v) = it.next()? {
 							return Ok(Some(v));
@@ -3440,8 +3284,7 @@ pub mod fallible
 				}
 			}
 
-			#[inline] fn try_fold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E>
-			where
+			#[inline] fn try_fold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E> where
 				E: From<Self::Error>,
 				G: FnMut(B, Self::Item) -> Result<B, E>,
 			{
@@ -3499,7 +3342,8 @@ pub mod fallible
 			type Item = I::Item;
 			type Error = I::Error;
 
-			#[inline] fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+			#[inline] fn next(&mut self) -> Result<Option<I::Item>, I::Error>
+            {
 				if self.done {
 					return Ok(None);
 				}
@@ -3521,7 +3365,8 @@ pub mod fallible
 				}
 			}
 
-			#[inline] fn count(self) -> Result<usize, I::Error> {
+			#[inline] fn count(self) -> Result<usize, I::Error>
+            {
 				if self.done {
 					Ok(0)
 				} else {
@@ -3529,7 +3374,8 @@ pub mod fallible
 				}
 			}
 
-			#[inline] fn last(self) -> Result<Option<I::Item>, I::Error> {
+			#[inline] fn last(self) -> Result<Option<I::Item>, I::Error>
+            {
 				if self.done {
 					Ok(None)
 				} else {
@@ -3537,7 +3383,8 @@ pub mod fallible
 				}
 			}
 
-			#[inline] fn nth(&mut self, n: usize) -> Result<Option<I::Item>, I::Error> {
+			#[inline] fn nth(&mut self, n: usize) -> Result<Option<I::Item>, I::Error>
+            {
 				if self.done {
 					Ok(None)
 				} else {
@@ -3549,8 +3396,7 @@ pub mod fallible
 				}
 			}
 
-			#[inline] fn try_fold<B, E, F>(&mut self, init: B, f: F) -> Result<B, E>
-			where
+			#[inline] fn try_fold<B, E, F>(&mut self, init: B, f: F) -> Result<B, E> where
 				E: From<I::Error>,
 				F: FnMut(B, I::Item) -> Result<B, E>,
 			{
@@ -3589,8 +3435,7 @@ pub mod fallible
 				self.it.size_hint()
 			}
 
-			#[inline] fn try_fold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E>
-			where
+			#[inline] fn try_fold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E> where
 				E: From<I::Error>,
 				G: FnMut(B, I::Item) -> Result<B, E>,
 			{
@@ -3616,8 +3461,7 @@ pub mod fallible
 				}
 			}
 
-			#[inline] fn try_rfold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E>
-			where
+			#[inline] fn try_rfold<B, E, G>(&mut self, init: B, mut f: G) -> Result<B, E> where
 				E: From<I::Error>,
 				G: FnMut(B, I::Item) -> Result<B, E>,
 			{
@@ -3695,8 +3539,7 @@ pub mod fallible
 				self.it.nth(n).map_err(&mut self.f)
 			}
 
-			#[inline] fn try_fold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E>
-			where
+			#[inline] fn try_fold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E> where
 				E: From<B>,
 				G: FnMut(C, I::Item) -> Result<C, E>,
 			{
@@ -3717,8 +3560,7 @@ pub mod fallible
 				self.it.next_back().map_err(&mut self.f)
 			}
 
-			#[inline] fn try_rfold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E>
-			where
+			#[inline] fn try_rfold<C, E, G>(&mut self, init: C, mut f: G) -> Result<C, E> where
 				E: From<B>,
 				G: FnMut(C, I::Item) -> Result<C, E>,
 			{
@@ -3736,7 +3578,8 @@ pub mod fallible
 			Fold(U),
 		}
 
-		impl<T, U> From<T> for MappedErr<T, U> {
+		impl<T, U> From<T> for MappedErr<T, U>
+        {
 			#[inline] fn from(t: T) -> MappedErr<T, U> {
 				MappedErr::It(t)
 			}
@@ -3753,7 +3596,8 @@ pub mod fallible
 			I: FallibleIterator,
 		{
 			/// Returns a reference to the next value without advancing the iterator.
-			#[inline] pub fn peek(&mut self) -> Result<Option<&I::Item>, I::Error> {
+			#[inline] pub fn peek(&mut self) -> Result<Option<&I::Item>, I::Error>
+            {
 				if self.next.is_none() {
 					self.next = self.it.next()?;
 				}
@@ -3761,8 +3605,6 @@ pub mod fallible
 				Ok(self.next.as_ref())
 			}
 			/// Consume and return the next value of this iterator if a condition is true.
-			///
-			/// If func returns true for the next value of this iterator, consume and return it. Otherwise, return None.
 			#[inline] pub fn next_if(&mut self, f: impl Fn(&I::Item) -> bool) -> Result<Option<I::Item>, I::Error> {
 				match self.peek()? {
 					Some(item) if f(item) => self.next(),
@@ -3770,8 +3612,7 @@ pub mod fallible
 				}
 			}
 			/// Consume and return the next item if it is equal to `expected`.
-			#[inline] pub fn next_if_eq<T>(&mut self, expected: &T) -> Result<Option<I::Item>, I::Error>
-			where
+			#[inline] pub fn next_if_eq<T>(&mut self, expected: &T) -> Result<Option<I::Item>, I::Error> where
 				T: ?Sized,
 				I::Item: PartialEq<T>,
 			{
@@ -3785,7 +3626,8 @@ pub mod fallible
 			type Item = I::Item;
 			type Error = I::Error;
 
-			#[inline] fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+			#[inline] fn next(&mut self) -> Result<Option<I::Item>, I::Error>
+            {
 				if let Some(next) = self.next.take() {
 					return Ok(Some(next));
 				}
@@ -3802,8 +3644,7 @@ pub mod fallible
 				hint
 			}
 
-			#[inline] fn try_fold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E>
-			where
+			#[inline] fn try_fold<B, E, F>(&mut self, init: B, mut f: F) -> Result<B, E> where
 				E: From<I::Error>,
 				F: FnMut(B, I::Item) -> Result<B, E>,
 			{
@@ -3837,8 +3678,7 @@ pub mod fallible
 				self.0.count()
 			}
 
-			#[inline] fn try_fold<B, E, F>(&mut self, init: B, f: F) -> Result<B, E>
-			where
+			#[inline] fn try_fold<B, E, F>(&mut self, init: B, f: F) -> Result<B, E> where
 				E: From<I::Error>,
 				F: FnMut(B, I::Item) -> Result<B, E>,
 			{
@@ -3853,8 +3693,7 @@ pub mod fallible
 				self.0.next()
 			}
 
-			#[inline] fn try_rfold<B, E, F>(&mut self, init: B, f: F) -> Result<B, E>
-			where
+			#[inline] fn try_rfold<B, E, F>(&mut self, init: B, f: F) -> Result<B, E> where
 				E: From<I::Error>,
 				F: FnMut(B, I::Item) -> Result<B, E>,
 			{
@@ -3901,7 +3740,8 @@ pub mod fallible
 			type Item = I::Item;
 			type Error = I::Error;
 
-			#[inline] fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+			#[inline] fn next(&mut self) -> Result<Option<I::Item>, I::Error>
+            {
 				if self.n == 0 {
 					self.it.next()
 				} else {
@@ -3939,7 +3779,8 @@ pub mod fallible
             {
 				let flag = &mut self.flag;
 				let pred = &mut self.predicate;
-				self.it.find(move |x| {
+				self.it.find(move |x|
+                {
 					if *flag || !pred(x)? {
 						*flag = true;
 						Ok(true)
@@ -3972,7 +3813,8 @@ pub mod fallible
 			type Item = I::Item;
 			type Error = I::Error;
 
-			#[inline] fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+			#[inline] fn next(&mut self) -> Result<Option<I::Item>, I::Error>
+            {
 				if self.first_take {
 					self.first_take = false;
 					self.it.next()
@@ -4013,7 +3855,8 @@ pub mod fallible
 			type Item = I::Item;
 			type Error = I::Error;
 
-			#[inline] fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+			#[inline] fn next(&mut self) -> Result<Option<I::Item>, I::Error>
+            {
 				if self.remaining == 0 {
 					return Ok(None);
 				}
@@ -4048,7 +3891,8 @@ pub mod fallible
 			type Item = I::Item;
 			type Error = I::Error;
 
-			#[inline] fn next(&mut self) -> Result<Option<I::Item>, I::Error> {
+			#[inline] fn next(&mut self) -> Result<Option<I::Item>, I::Error>
+            {
 				if self.flag {
 					Ok(None)
 				} else {
@@ -4172,15 +4016,13 @@ pub mod fallible
 		/// into [`FallibleIterator`]
 		pub trait IteratorExt {
 			/// Convert an iterator of `Result`s into `FallibleIterator` by transposition
-			fn transpose_into_fallible<T, E>(self) -> Convert<Self>
-			where
+			fn transpose_into_fallible<T, E>(self) -> Convert<Self> where
 				Self: iter::Iterator<Item = Result<T, E>> + Sized;
 
 			/// Convert an iterator of anything into `FallibleIterator` by wrapping
 			/// into `Result<T, Infallible>` where `Infallible` is an error that can never actually
 			/// happen.
-			fn into_fallible<T>(self) -> IntoFallible<Self>
-			where
+			fn into_fallible<T>(self) -> IntoFallible<Self> where
 				Self: iter::Iterator<Item = T> + Sized;
 		}
 
@@ -4189,8 +4031,7 @@ pub mod fallible
 			I: iter::Iterator,
 		{
 			/// Convert an iterator of `Result`s into `FallibleIterator` by transposition
-			fn transpose_into_fallible<T, E>(self) -> Convert<Self>
-			where
+			fn transpose_into_fallible<T, E>(self) -> Convert<Self> where
 				Self: iter::Iterator<Item = Result<T, E>> + Sized,
 			{
 				Convert(self)
@@ -4198,8 +4039,7 @@ pub mod fallible
 			/// Convert an iterator of anything into `FallibleIterator` by wrapping
 			/// into `Result<T, Infallible>` where `Infallible` is an error that can never actually
 			/// happen.
-			fn into_fallible<T>(self) -> IntoFallible<Self>
-			where
+			fn into_fallible<T>(self) -> IntoFallible<Self> where
 				Self: iter::Iterator<Item = T> + Sized,
 			{
 				IntoFallible(self)
@@ -4793,13 +4633,9 @@ pub mod parsers
 			}
 
 			/// Get the underlying bits value.
-			///
-			/// The returned value is exactly the bits set in this flags value.
 			fn bits(&self) -> Self::Bits;
 
 			/// Convert from a bits value.
-			///
-			/// This method will return `None` if any unknown bits are set.
 			fn from_bits(bits: Self::Bits) -> Option<Self> {
 				let truncated = Self::from_bits_truncate(bits);
 
@@ -4819,16 +4655,14 @@ pub mod parsers
 			fn from_bits_retain(bits: Self::Bits) -> Self;
 
 			/// Get a flags value with the bits of a flag with the given name set.
-			///
-			/// This method will return `None` if `name` is empty or doesn't
-			/// correspond to any named flag.
 			fn from_name(name: &str) -> Option<Self> {
 				// Don't parse empty names as empty flags
 				if name.is_empty() {
 					return None;
 				}
 
-				for flag in Self::FLAGS {
+				for flag in Self::FLAGS
+                {
 					if flag.name() == name {
 						return Some(Self::from_bits_retain(flag.value().bits()));
 					}
@@ -4838,17 +4672,11 @@ pub mod parsers
 			}
 
 			/// Yield a set of contained flags values.
-			///
-			/// Each yielded flags value will correspond to a defined named flag. Any unknown bits
-			/// will be yielded together as a final flags value.
 			fn iter(&self) -> iter::Iter<Self> {
 				iter::Iter::new(self)
 			}
 
 			/// Yield a set of contained named flags values.
-			///
-			/// This method is like [`Flags::iter`], except only yields bits in contained named flags.
-			/// Any unknown bits, or bits not corresponding to a contained flag will not be yielded.
 			fn iter_names(&self) -> iter::IterNames<Self> {
 				iter::IterNames::new(self)
 			}
@@ -4890,9 +4718,6 @@ pub mod parsers
 			}
 
 			/// The intersection of a source flags value with the complement of a target flags value (`&!`).
-			///
-			/// This method is not equivalent to `self & !other` when `other` has unknown bits set.
-			/// `remove` won't truncate `other`, but the `!` operator will.
 			fn remove(&mut self, other: Self)
 			where
 				Self: Sized,
@@ -4933,9 +4758,6 @@ pub mod parsers
 			}
 
 			/// The intersection of a source flags value with the complement of a target flags value (`&!`).
-			///
-			/// This method is not equivalent to `self & !other` when `other` has unknown bits set.
-			/// `difference` won't truncate `other`, but the `!` operator will.
 			#[must_use]
 			fn difference(self, other: Self) -> Self {
 				Self::from_bits_retain(self.bits() & !other.bits())
@@ -5035,6 +4857,11 @@ pub mod ptr
 pub mod result
 {
 	pub use std::result::{ * };
+}
+
+pub mod slice
+{
+	pub use std::slice::{ * };
 }
 
 pub mod sqlite3
@@ -7480,7 +7307,7 @@ pub mod sqlite3
 			}
 		}
 
-		impl error::Error for Errors
+		impl ::error::Error for Errors
 		{
 			fn description(&self) -> &str 
 			{ code_to_str(self.extended_code) }
@@ -7536,23 +7363,23 @@ pub mod sqlite3
 				super::SQLITE_IOERR_UNLOCK            => "I/O error within xUnlock of a VFS object",
 				super::SQLITE_IOERR_RDLOCK            => "I/O error within xLock of a VFS object (trying to obtain a read lock)",
 				super::SQLITE_IOERR_DELETE            => "I/O error within xDelete of a VFS object",
-				super::SQLITE_IOERR_BLOCKED           => "SQLITE_IOERR_BLOCKED", // no longer used
+				super::SQLITE_IOERR_BLOCKED           => "SQLITE_IOERR_BLOCKED",
 				super::SQLITE_IOERR_NOMEM             => "Out of memory in I/O layer",
 				super::SQLITE_IOERR_ACCESS            => "I/O error within xAccess of a VFS object",
 				super::SQLITE_IOERR_CHECKRESERVEDLOCK => "I/O error within then xCheckReservedLock method",
 				super::SQLITE_IOERR_LOCK              => "I/O error in the advisory file locking layer",
 				super::SQLITE_IOERR_CLOSE             => "I/O error within the xClose method",
-				super::SQLITE_IOERR_DIR_CLOSE         => "SQLITE_IOERR_DIR_CLOSE", // no longer used
+				super::SQLITE_IOERR_DIR_CLOSE         => "SQLITE_IOERR_DIR_CLOSE",
 				super::SQLITE_IOERR_SHMOPEN           => "I/O error within the xShmMap method (trying to open a new shared-memory segment)",
 				super::SQLITE_IOERR_SHMSIZE           => "I/O error within the xShmMap method (trying to resize an existing shared-memory segment)",
-				super::SQLITE_IOERR_SHMLOCK           => "SQLITE_IOERR_SHMLOCK", // no longer used
+				super::SQLITE_IOERR_SHMLOCK           => "SQLITE_IOERR_SHMLOCK",
 				super::SQLITE_IOERR_SHMMAP            => "I/O error within the xShmMap method (trying to map a shared-memory segment into process address space)",
 				super::SQLITE_IOERR_SEEK              => "I/O error within the xRead or xWrite (trying to seek within a file)",
 				super::SQLITE_IOERR_DELETE_NOENT      => "File being deleted does not exist",
 				super::SQLITE_IOERR_MMAP              => "I/O error while trying to map or unmap part of the database file into process address space",
 				super::SQLITE_IOERR_GETTEMPPATH       => "VFS is unable to determine a suitable directory for temporary files",
 				super::SQLITE_IOERR_CONVPATH          => "cygwin_conv_path() system call failed",
-				super::SQLITE_IOERR_VNODE             => "SQLITE_IOERR_VNODE", // not documented?
+				super::SQLITE_IOERR_VNODE             => "SQLITE_IOERR_VNODE",
 				super::SQLITE_IOERR_AUTH              => "SQLITE_IOERR_AUTH",
 				SQLITE_IOERR_BEGIN_ATOMIC      => "SQLITE_IOERR_BEGIN_ATOMIC",
 				SQLITE_IOERR_COMMIT_ATOMIC     => "SQLITE_IOERR_COMMIT_ATOMIC",
@@ -7568,7 +7395,7 @@ pub mod sqlite3
 				super::SQLITE_BUSY_SNAPSHOT           => "Cannot promote read transaction to write transaction because of writes by another connection",
 				SQLITE_BUSY_TIMEOUT           => "SQLITE_BUSY_TIMEOUT",
 
-				super::SQLITE_CANTOPEN_NOTEMPDIR      => "SQLITE_CANTOPEN_NOTEMPDIR", // no longer used
+				super::SQLITE_CANTOPEN_NOTEMPDIR      => "SQLITE_CANTOPEN_NOTEMPDIR",
 				super::SQLITE_CANTOPEN_ISDIR          => "Attempted to open directory as file",
 				super::SQLITE_CANTOPEN_FULLPATH       => "Unable to convert filename into full pathname",
 				super::SQLITE_CANTOPEN_CONVPATH       => "cygwin_conv_path() system call failed",
@@ -7605,94 +7432,71 @@ pub mod sqlite3
 
 				super::SQLITE_WARNING_AUTOINDEX       => "Automatic indexing used - database might benefit from additional indexes",
 
-				super::SQLITE_AUTH_USER               => "SQLITE_AUTH_USER", // not documented?
+				super::SQLITE_AUTH_USER               => "SQLITE_AUTH_USER",
 
 				_ => "Unknown error code",
 			}
 		}
 	
 		/// Enum listing possible errors from rusqlite.
-		#[derive(Debug)]
-		#[non_exhaustive]
+		#[non_exhaustive] #[derive(Debug)]		
 		pub enum Error
 		{
 			/// An error from an underlying SQLite call.
 			SqliteFailure(Errors, Option<String>),
-
 			/// Error reported when attempting to open a connection when SQLite was
 			/// configured to allow single-threaded use only.
 			SqliteSingleThreadedMode,
-
 			/// Error when the value of a particular column is requested, but it cannot
 			/// be converted to the requested Rust type.
-			FromSqlConversionFailure(usize, Type, Box<dyn error::Error + Send + Sync + 'static>),
-
+			FromSqlConversionFailure(usize, Type, Box<dyn std::error::Error + Send + Sync + 'static>),
 			/// Error when SQLite gives us an integral value outside the range of the
 			/// requested type (e.g., trying to get the value 1000 into a `u8`).
 			/// The associated `usize` is the column index,
 			/// and the associated `i64` is the value returned by SQLite.
 			IntegralValueOutOfRange(usize, i64),
-
 			/// Error converting a string to UTF-8.
 			Utf8Error(str::Utf8Error),
-
 			/// Error converting a string to a C-compatible string because it contained
 			/// an embedded nul.
 			NulError(NulError),
-
 			/// Error when using SQL named parameters and passing a parameter name not
 			/// present in the SQL.
 			InvalidParameterName(String),
-
 			/// Error converting a file path to a string.
 			InvalidPath(PathBuf),
-
 			/// Error returned when an [`execute`](crate::Connection::execute) call
 			/// returns rows.
 			ExecuteReturnedResults,
-
 			/// Error when a query that was expected to return at least one row (e.g.,
 			/// for [`query_row`](crate::Connection::query_row)) did not return any.
 			QueryReturnedNoRows,
-
 			/// Error when a query that was expected to return only one row (e.g.,
 			/// for [`query_one`](crate::Connection::query_one)) did return more than one.
 			QueryReturnedMoreThanOneRow,
-
 			/// Error when the value of a particular column is requested, but the index
 			/// is out of range for the statement.
 			InvalidColumnIndex(usize),
-
 			/// Error when the value of a named column is requested, but no column
 			/// matches the name for the statement.
 			InvalidColumnName(String),
-
 			/// Error when the value of a particular column is requested, but the type
 			/// of the result in that column cannot be converted to the requested
 			/// Rust type.
 			InvalidColumnType(usize, String, Type),
-
 			/// Error when a query that was expected to insert one row did not insert
 			/// any or insert many.
 			StatementChangedRows(usize),			
-
-			/// Error available for the implementors of the
-			/// [`ToSql`](crate::types::ToSql) trait.
-			ToSqlConversionFailure(Box<dyn error::Error + Send + Sync + 'static>),
-
+			/// Error available for the implementors of the [`ToSql`](crate::types::ToSql) trait.
+			ToSqlConversionFailure(Box<dyn std::error::Error + Send + Sync + 'static>),
 			/// Error when the SQL is not a `SELECT`, is not read-only.
 			InvalidQuery,
-
 			/// An unwinding panic occurs in a UDF (user-defined function).
 			UnwindingPanic,
-
 			/// Error when the SQL contains multiple statements.
 			MultipleStatement,
-			/// Error when the number of bound parameters does not match the number of
-			/// parameters in the query. The first `usize` is how many parameters were
-			/// given, the 2nd is how many were expected.
+			/// Error when the number of bound parameters does not match the number of parameters in the query.
 			InvalidParameterCount(usize, usize),
-			
 			/// Error referencing a specific token in the input SQL
 			SqlInputError {
 				/// error code
@@ -7754,13 +7558,15 @@ pub mod sqlite3
 			}
 		}
 
-		impl From<str::Utf8Error> for Error {
+		impl From<str::Utf8Error> for Error
+        {
 			#[cold] fn from(err: str::Utf8Error) -> Self {
 				Self::Utf8Error(err)
 			}
 		}
 
-		impl From<NulError> for Error {
+		impl From<NulError> for Error
+        {
 			#[cold] fn from(err: NulError) -> Self {
 				Self::NulError(err)
 			}
@@ -7769,10 +7575,10 @@ pub mod sqlite3
 		const UNKNOWN_COLUMN: usize = usize::MAX;
 		/// The conversion isn't precise, but it's convenient to have it
 		/// to allow use of `get_raw(…).as_…()?` in callbacks that take `Error`.
-		impl From<FromSqlError> for Error {
-			#[cold] fn from(err: FromSqlError) -> Self {
-				// The error type requires index and type fields, but they aren't known in this
-				// context.
+		impl From<FromSqlError> for Error
+        {
+			#[cold] fn from(err: FromSqlError) -> Self
+            {
 				match err {
 					FromSqlError::OutOfRange(val) => Self::IntegralValueOutOfRange(UNKNOWN_COLUMN, val),
 					FromSqlError::InvalidBlobSize { .. } => {
@@ -7843,8 +7649,8 @@ pub mod sqlite3
 			}
 		}
 
-		impl error::Error for Error {
-			fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+		impl ::error::Error for Error {
+			fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 				match *self {
 					Self::SqliteFailure(ref err, _) => Some(err),
 					Self::Utf8Error(ref err) => Some(err),
@@ -7879,9 +7685,7 @@ pub mod sqlite3
 
 		impl Error {
 			/// Returns the underlying SQLite error if this is [`Error::SqliteFailure`].
-			#[inline]
-			#[must_use]
-			pub fn sqlite_error(&self) -> Option<&Error> {
+			#[inline] #[must_use] pub fn sqlite_error(&self) -> Option<&Error> {
 				match self {
 					Self::SqliteFailure(error, _) => Some(error),
 					_ => None,
@@ -7889,9 +7693,7 @@ pub mod sqlite3
 			}
 			/// Returns the underlying SQLite error code if this is
 			/// [`Error::SqliteFailure`].
-			#[inline]
-			#[must_use]
-			pub fn sqlite_error_code(&self) -> Option<ErrorCode> {
+			#[inline] #[must_use] pub fn sqlite_error_code(&self) -> Option<ErrorCode> {
 				self.sqlite_error().map(|error| error.code)
 			}
 		}
@@ -7957,7 +7759,8 @@ pub mod sqlite3
 		pub unsafe fn to_sqlite_error(e: &Error, err_msg: *mut *mut c_char) -> c_int {
 			//use crate::util::alloc;
 			match e {
-				Error::SqliteFailure(err, s) => {
+				Error::SqliteFailure(err, s) =>
+                {
 					if let Some(s) = s {
 						*err_msg = alloc::alloc(s);
 					}
@@ -7979,7 +7782,7 @@ pub mod sqlite3
         use ::
         {
             ffi::{ CStr },
-            sqlite3::{ Error, Result, Statement },
+            sqlite3::{ * },
             *,
         };
         /*
@@ -7994,12 +7797,12 @@ pub mod sqlite3
 		}
 		/// A trait implemented by types that can index into parameters of a statement.
 		pub trait BindIndex: sealed::Sealed {
-			/// Returns the index of the associated parameter, or `Error` if no such
-			/// parameter exists.
+			/// Returns the index of the associated parameter, or `Error` if no such parameter exists.
 			fn idx(&self, stmt: &Statement<'_>) -> Result<usize>;
 		}
 
-		impl BindIndex for usize {
+		impl BindIndex for usize
+        {
 			#[inline] fn idx(&self, _: &Statement<'_>) -> Result<usize> {
 				// No validation
 				Ok(*self)
@@ -8038,10 +7841,7 @@ pub mod sqlite3
             ffi::{ c_int, c_void },
             panic::{ catch_unwind },
             time::lib::{ Duration },
-            sqlite3::
-            {
-                Connection, InnerConnection, Result,
-            },
+            sqlite3::{ * },
             *,
         };
         /*
@@ -8078,6 +7878,7 @@ pub mod sqlite3
 		}
 
 		impl InnerConnection
+       
         {
 			#[inline] fn busy_timeout(&mut self, timeout: c_int) -> Result<()>
             {
@@ -8137,13 +7938,15 @@ pub mod sqlite3
 			}
 		}
 
-		impl<'conn> DerefMut for CachedStatement<'conn> {
+		impl<'conn> DerefMut for CachedStatement<'conn>
+        {
 			#[inline] fn deref_mut(&mut self) -> &mut Statement<'conn> {
 				self.stmt.as_mut().unwrap()
 			}
 		}
 
-		impl Drop for CachedStatement<'_> {
+		impl Drop for CachedStatement<'_>
+        {
 			#[inline] fn drop(&mut self) {
 				if let Some(stmt) = self.stmt.take() {
 					self.cache.cache_stmt(unsafe { stmt.into_raw() });
@@ -8151,7 +7954,8 @@ pub mod sqlite3
 			}
 		}
 
-		impl CachedStatement<'_> {
+		impl CachedStatement<'_>
+        {
 			#[inline] fn new<'conn>(stmt: Statement<'conn>, cache: &'conn StatementCache) -> CachedStatement<'conn> {
 				CachedStatement {
 					stmt: Some(stmt),
@@ -8171,17 +7975,8 @@ pub mod sqlite3
 				Self(RefCell::new(LruCache::new(capacity)))
 			}
 
-			#[inline] fn set_capacity(&self, capacity: usize) {
-				self.0.borrow_mut().set_capacity(capacity);
-			}
-
-			// Search the cache for a prepared-statement object that implements `sql`.
-			// If no such prepared-statement can be found, allocate and prepare a new one.
-			//
-			// # Failure
-			//
-			// Will return `Err` if no cached statement can be found and the underlying
-			// SQLite prepare call fails.
+			#[inline] fn set_capacity(&self, capacity: usize) { self.0.borrow_mut().set_capacity(capacity); }
+            
 			fn get<'conn>(
 				&'conn self,
 				conn: &'conn Connection,
@@ -8240,10 +8035,6 @@ pub mod sqlite3
 		impl Statement<'_>
         {
 			/// Get all the column names in the result set of the prepared statement.
-			///
-			/// If associated DB schema can be altered concurrently, you should make
-			/// sure that current statement has already been stepped once before
-			/// calling this method.
 			pub fn column_names(&self) -> Vec<&str>
             {
 				let n = self.column_count();
@@ -8256,53 +8047,18 @@ pub mod sqlite3
 			}
 			/// Return the number of columns in the result set returned by the prepared
 			/// statement.
-			///
-			/// If associated DB schema can be altered concurrently, you should make
-			/// sure that current statement has already been stepped once before
-			/// calling this method.
 			#[inline] pub fn column_count(&self) -> usize {
 				self.stmt.column_count()
 			}
 			/// Check that column name reference lifetime is limited:
 			/// <https://www.sqlite.org/c3ref/column_name.html>
-			/// > The returned string pointer is valid...
-			///
-			/// `column_name` reference can become invalid if `stmt` is reprepared
-			/// (because of schema change) when `query_row` is called. So we assert
-			/// that a compilation error happens if this reference is kept alive:
-			/// ```compile_fail
-			/// use rusqlite::{Connection, Result};
-			/// fn main() -> Result<()> {
-			///     let db = Connection::open_in_memory()?;
-			///     let mut stmt = db.prepare("SELECT 1 as x")?;
-			///     let column_name = stmt.column_name(0)?;
-			///     let x = stmt.query_row([], |r| r.get::<_, i64>(0))?; // E0502
-			///     assert_eq!(1, x);
-			///     assert_eq!("x", column_name);
-			///     Ok(())
-			/// }
-			/// ```
-			#[inline]
-			pub(super) fn column_name_unwrap(&self, col: usize) -> &str {
+			#[inline] pub fn column_name_unwrap(&self, col: usize) -> &str {
 				// Just panic if the bounds are wrong for now, we never call this
 				// without checking first.
 				self.column_name(col).expect("Column out of bounds")
 			}
 			/// Returns the name assigned to a particular column in the result set
 			/// returned by the prepared statement.
-			///
-			/// If associated DB schema can be altered concurrently, you should make
-			/// sure that current statement has already been stepped once before
-			/// calling this method.
-			///
-			/// ## Failure
-			///
-			/// Returns an `Error::InvalidColumnIndex` if `idx` is outside the valid
-			/// column range for this row.
-			///
-			/// # Panics
-			///
-			/// Panics when column name is not valid UTF-8.
 			#[inline] pub fn column_name(&self, col: usize) -> Result<&str> {
 				self.stmt
 					.column_name(col)
@@ -8315,142 +8071,23 @@ pub mod sqlite3
 					})
 			}
 			/// Returns the column index in the result set for a given column name.
-			///
-			/// If there is no AS clause then the name of the column is unspecified and
-			/// may change from one release of SQLite to the next.
-			///
-			/// If associated DB schema can be altered concurrently, you should make
-			/// sure that current statement has already been stepped once before
-			/// calling this method.
-			///
-			/// # Failure
-			///
-			/// Will return an `Error::InvalidColumnName` when there is no column with
-			/// the specified `name`.
 			#[inline] pub fn column_index(&self, name: &str) -> Result<usize>
             {
 				let bytes = name.as_bytes();
 				let n = self.column_count();
-				for i in 0..n {
-					// Note: `column_name` is only fallible if `i` is out of bounds,
-					// which we've already checked.
+				for i in 0..n
+                {
 					if bytes.eq_ignore_ascii_case(self.stmt.column_name(i).unwrap().to_bytes()) {
 						return Ok(i);
 					}
 				}
 				Err(Error::InvalidColumnName(String::from(name)))
 			}
-			/// Returns a slice describing the columns of the result of the query.
-			///
-			/// If associated DB schema can be altered concurrently, you should make
-			/// sure that current statement has already been stepped once before
-			/// calling this method.
-			#[cfg(feature = "column_decltype")]
-			pub fn columns(&self) -> Vec<Column<'_>>
-            {
-				let n = self.column_count();
-				let mut cols = Vec::with_capacity(n);
-				for i in 0..n {
-					let name = self.column_name_unwrap(i);
-					let slice = self.stmt.column_decltype(i);
-					let decl_type = slice.map(|s| {
-						s.to_str()
-							.expect("Invalid UTF-8 sequence in column declaration")
-					});
-					cols.push(Column { name, decl_type });
-				}
-				cols
-			}
-			/// Returns the names of the database, table, and row from which
-			/// each column of this query's results originate.
-			///
-			/// Computed or otherwise derived columns will have None values for these fields.
-			#[cfg(feature = "column_metadata")]
-			pub fn columns_with_metadata(&self) -> Vec<ColumnMetadata<'_>>
-            {
-				let n = self.column_count();
-				let mut col_mets = Vec::with_capacity(n);
-				for i in 0..n {
-					let name = self.column_name_unwrap(i);
-					let db_slice = self.stmt.column_database_name(i);
-					let tbl_slice = self.stmt.column_table_name(i);
-					let origin_slice = self.stmt.column_origin_name(i);
-					col_mets.push(ColumnMetadata {
-						name,
-						database_name: db_slice.map(|s| {
-							s.to_str()
-								.expect("Invalid UTF-8 sequence in column db name")
-						}),
-						table_name: tbl_slice.map(|s| {
-							s.to_str()
-								.expect("Invalid UTF-8 sequence in column table name")
-						}),
-						origin_name: origin_slice.map(|s| {
-							s.to_str()
-								.expect("Invalid UTF-8 sequence in column origin name")
-						}),
-					})
-				}
-				col_mets
-			}
-			/// Extract metadata of column at specified index
-			///
-			/// Returns:
-			/// - database name
-			/// - table name
-			/// - original column name
-			/// - declared data type
-			/// - name of default collation sequence
-			/// - True if column has a NOT NULL constraint
-			/// - True if column is part of the PRIMARY KEY
-			/// - True if column is AUTOINCREMENT
-			///
-			/// See [Connection::column_metadata]
-			#[cfg(feature = "column_metadata")]
-			#[allow(clippy::type_complexity)]
-			pub fn column_metadata(
-				&self,
-				col: usize,
-			) -> Result<
-				Option<(
-					&CStr,
-					&CStr,
-					&CStr,
-					Option<&CStr>,
-					Option<&CStr>,
-					bool,
-					bool,
-					bool,
-				)>,
-			>
-            {
-				let db_name = self.stmt.column_database_name(col);
-				let table_name = self.stmt.column_table_name(col);
-				let origin_name = self.stmt.column_origin_name(col);
-				if db_name.is_none() || table_name.is_none() || origin_name.is_none() {
-					return Ok(None);
-				}
-				let (data_type, coll_seq, not_null, primary_key, auto_inc) =
-					self.conn
-						.column_metadata(db_name, table_name.unwrap(), origin_name.unwrap())?;
-				Ok(Some((
-					db_name.unwrap(),
-					table_name.unwrap(),
-					origin_name.unwrap(),
-					data_type,
-					coll_seq,
-					not_null,
-					primary_key,
-					auto_inc,
-				)))
-			}
 		}
 
 		impl Connection
         {
 			/// Check if `table_name`.`column_name` exists.
-			///
-			/// `db_name` is main, temp, the name in ATTACH, or `None` to search all databases.
 			pub fn column_exists<N: Name>(
 				&self,
 				db_name: Option<N>,
@@ -8460,19 +8097,10 @@ pub mod sqlite3
 				self.exists(db_name, table_name, Some(column_name))
 			}
 			/// Check if `table_name` exists.
-			///
-			/// `db_name` is main, temp, the name in ATTACH, or `None` to search all databases.
 			pub fn table_exists<N: Name>(&self, db_name: Option<N>, table_name: N) -> Result<bool> {
 				self.exists(db_name, table_name, None)
 			}
 			/// Extract metadata of column at specified index
-			///
-			/// Returns:
-			/// - declared data type
-			/// - name of default collation sequence
-			/// - True if column has a NOT NULL constraint
-			/// - True if column is part of the PRIMARY KEY
-			/// - True if column is AUTOINCREMENT
 			#[allow(clippy::type_complexity)]
 			pub fn column_metadata<N: Name>(
 				&self,
@@ -8535,7 +8163,8 @@ pub mod sqlite3
 				let table_name = table_name.as_cstr()?;
 				let cn = column_name.as_ref().map(N::as_cstr).transpose()?;
 				let column_name = cn.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
-				let r = unsafe {
+				let r = unsafe
+                {
 					sqlite3_table_column_metadata(
 						self.handle(),
 						db_name,
@@ -8568,6 +8197,7 @@ pub mod sqlite3
             sqlite3::
             {
                 error::{ check, Connection, Result },
+                *,
             },
             *,
         };
@@ -8585,51 +8215,51 @@ pub mod sqlite3
 			SQLITE_DBCONFIG_ENABLE_TRIGGER = SQLITE_DBCONFIG_ENABLE_TRIGGER,
 			/// Enable or disable the `fts3_tokenizer()` function which is part of the
 			/// FTS3 full-text search engine extension.
-			SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER = SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER, // 3.12.0
+			SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER = SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER,
 			//SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION = 1005,
 			/// In WAL mode, enable or disable the checkpoint operation before closing
 			/// the connection.
-			SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE = 1006, // 3.16.2
+			SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE = 1006,
 			/// Activates or deactivates the query planner stability guarantee (QPSG).
-			SQLITE_DBCONFIG_ENABLE_QPSG = 1007, // 3.20.0
+			SQLITE_DBCONFIG_ENABLE_QPSG = 1007,
 			/// Includes or excludes output for any operations performed by trigger
 			/// programs from the output of EXPLAIN QUERY PLAN commands.
-			SQLITE_DBCONFIG_TRIGGER_EQP = 1008, // 3.22.0
+			SQLITE_DBCONFIG_TRIGGER_EQP = 1008,
 			/// Activates or deactivates the "reset" flag for a database connection.
 			/// Run VACUUM with this flag set to reset the database.
-			SQLITE_DBCONFIG_RESET_DATABASE = 1009, // 3.24.0
+			SQLITE_DBCONFIG_RESET_DATABASE = 1009,
 			/// Activates or deactivates the "defensive" flag for a database connection.
-			SQLITE_DBCONFIG_DEFENSIVE = 1010, // 3.26.0
+			SQLITE_DBCONFIG_DEFENSIVE = 1010,
 			/// Activates or deactivates the `writable_schema` flag.
-			SQLITE_DBCONFIG_WRITABLE_SCHEMA = 1011, // 3.28.0
+			SQLITE_DBCONFIG_WRITABLE_SCHEMA = 1011,
 			/// Activates or deactivates the legacy behavior of the ALTER TABLE RENAME
 			/// command.
-			SQLITE_DBCONFIG_LEGACY_ALTER_TABLE = 1012, // 3.29
+			SQLITE_DBCONFIG_LEGACY_ALTER_TABLE = 1012,
 			/// Activates or deactivates the legacy double-quoted string literal
 			/// misfeature for DML statements only.
-			SQLITE_DBCONFIG_DQS_DML = 1013, // 3.29.0
+			SQLITE_DBCONFIG_DQS_DML = 1013,
 			/// Activates or deactivates the legacy double-quoted string literal
 			/// misfeature for DDL statements.
-			SQLITE_DBCONFIG_DQS_DDL = 1014, // 3.29.0
+			SQLITE_DBCONFIG_DQS_DDL = 1014,
 			/// Enable or disable views.
-			SQLITE_DBCONFIG_ENABLE_VIEW = 1015, // 3.30.0
+			SQLITE_DBCONFIG_ENABLE_VIEW = 1015,
 			/// Activates or deactivates the legacy file format flag.
-			SQLITE_DBCONFIG_LEGACY_FILE_FORMAT = 1016, // 3.31.0
+			SQLITE_DBCONFIG_LEGACY_FILE_FORMAT = 1016,
 			/// Tells SQLite to assume that database schemas (the contents of the
 			/// `sqlite_master` tables) are untainted by malicious content.
-			SQLITE_DBCONFIG_TRUSTED_SCHEMA = 1017, // 3.31.0
+			SQLITE_DBCONFIG_TRUSTED_SCHEMA = 1017,
 			/// Sets or clears a flag that enables collection of the
 			/// `sqlite3_stmt_scanstatus_v2()` statistics
-			SQLITE_DBCONFIG_STMT_SCANSTATUS = 1018, // 3.42.0
+			SQLITE_DBCONFIG_STMT_SCANSTATUS = 1018,
 			/// Changes the default order in which tables and indexes are scanned
-			SQLITE_DBCONFIG_REVERSE_SCANORDER = 1019, // 3.42.0
+			SQLITE_DBCONFIG_REVERSE_SCANORDER = 1019,
 			/// Enables or disables the ability of the ATTACH DATABASE SQL command
 			/// to create a new database file if the database filed named in the ATTACH command does not already exist.
-			SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE = 1020, // 3.49.0
+			SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE = 1020,
 			/// Enables or disables the ability of the ATTACH DATABASE SQL command to open a database for writing.
-			SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE = 1021, // 3.49.0
+			SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE = 1021,
 			/// Enables or disables the ability to include comments in SQL text.
-			SQLITE_DBCONFIG_ENABLE_COMMENTS = 1022, // 3.49.0
+			SQLITE_DBCONFIG_ENABLE_COMMENTS = 1022,
 		}
 
 		impl Connection
@@ -8680,7 +8310,7 @@ pub mod sqlite3
             path::{ Path },
             sqlite3::
             {
-                error::{ decode_result_raw, error_from_handle, error_with_offset, Error },
+                error::{ decode_result_raw, error_from_handle, error_with_offset, Error, Errors },
                 statement::{ Statement, raw::{ RawStatement }, },
                 *,
             },
@@ -8719,17 +8349,17 @@ pub mod sqlite3
             {
 				ensure_safe_sqlite_threading_mode()?;
 
-				let z_vfs = match vfs {
+				let z_vfs = match vfs
+                {
 					Some(c_vfs) => c_vfs.as_ptr(),
 					None => ptr::null(),
 				};
-
-				// turn on extended results code before opening database to have a better diagnostic if a failure happens
+                
 				let exrescode = if version_number() >= 3_037_000 {
 					flags |= OpenFlags::SQLITE_OPEN_EXRESCODE;
 					true
 				} else {
-					false // flag SQLITE_OPEN_EXRESCODE is ignored by SQLite version < 3.37.0
+					false
 				};
 
 				unsafe {
@@ -8741,7 +8371,7 @@ pub mod sqlite3
 						} else {
 							let mut e = error_from_handle(db, r);
 							if let Error::SqliteFailure(
-								Error {
+								Errors {
 									code: ErrorCode::CannotOpen,
 									..
 								},
@@ -8756,8 +8386,7 @@ pub mod sqlite3
 
 						return Err(e);
 					}
-
-					// attempt to turn on extended results code; don't fail if we can't.
+                    
 					if !exrescode {
 						sqlite3_extended_result_codes(db, 1);
 					}
@@ -8834,15 +8463,13 @@ pub mod sqlite3
 				let (c_sql, len, _) = str_for_sqlite(sql.as_bytes())?;
 				let mut c_tail: *const c_char = ptr::null();
 				let r = unsafe { self.prepare_(c_sql, len, flags, &mut c_stmt, &mut c_tail) };
-				// If there is an error, *ppStmt is set to NULL.
-				if r != SQLITE_OK {
-					return Err(unsafe { error_with_offset(self.db, r, sql) });
-				}
-				// If the input text contains no SQL (if the input is an empty string or a
-				// comment) then *ppStmt is set to NULL.
-				let tail = if c_tail.is_null() {
-					0
-				} else {
+                
+				if r != SQLITE_OK
+                { return Err(unsafe { error_with_offset(self.db, r, sql) }); }
+                
+				let tail = if c_tail.is_null() { 0 }
+                else
+                {
 					let n = (c_tail as isize) - (c_sql as isize);
 					if n <= 0 || n >= len as isize {
 						0
@@ -8850,7 +8477,9 @@ pub mod sqlite3
 						n as usize
 					}
 				};
-				Ok((
+
+				Ok
+                ((
 					Statement::new(conn, unsafe { RawStatement::new(c_stmt) }),
 					tail,
 				))
@@ -8876,12 +8505,8 @@ pub mod sqlite3
 
 			#[inline] pub fn total_changes(&self) -> u64
             {
-				#[cfg(not(feature = "modern_sqlite"))]
-				unsafe {
-					sqlite3_total_changes(self.db()) as u64
-				}
-				#[cfg(feature = "modern_sqlite")] // 3.37.0
-				unsafe {
+                unsafe
+                {
 					sqlite3_total_changes64(self.db()) as u64
 				}
 			}
@@ -8908,7 +8533,7 @@ pub mod sqlite3
 
 			pub fn cache_flush(&mut self) -> Result<()>
             {
-				crate::error::check(unsafe { sqlite3_db_cacheflush(self.db()) })
+				::error::check(unsafe { sqlite3_db_cacheflush(self.db()) })
 			}
             
 			#[inline] fn remove_hooks(&mut self) {}
@@ -8963,6 +8588,7 @@ pub mod sqlite3
 			ptr: *mut driver,
 			db_name: N,
 		) -> Option<&str>
+       
         {
 			let db_name = db_name.as_cstr().unwrap();
 			let db_filename = sqlite3_db_filename(ptr, db_name.as_ptr());
@@ -9005,245 +8631,57 @@ pub mod sqlite3
         */
         use ::
         {
+            sqlite3::{ BindIndex, Result, Statement, ToSql },
             *,
         };
         /*
-		use crate::{BindIndex, Result, Statement, ToSql};
         */
         mod sealed
 		{
-			/// This trait exists just to ensure that the only impls of `trait Params`
-			/// that are allowed are ones in this crate.
+			/// This trait exists just to ensure that the only impls of `trait Params` that are allowed are ones in this crate.
 			pub trait Sealed {}
 		}
-		use sealed::Sealed;
-		/// Trait used for [sets of parameter][params] passed into SQL
-		/// statements/queries.
-		///
-		/// [params]: https://www.sqlite.org/c3ref/bind_blob.html
-		///
-		/// Note: Currently, this trait can only be implemented inside this crate.
-		/// Additionally, it's methods (which are `doc(hidden)`) should currently not be
-		/// considered part of the stable API, although it's possible they will
-		/// stabilize in the future.
-		///
-		/// # Passing parameters to SQLite
-		///
-		/// Many functions in this library let you pass parameters to SQLite. Doing this
-		/// lets you avoid any risk of SQL injection, and is simpler than escaping
-		/// things manually. Aside from deprecated functions and a few helpers, this is
-		/// indicated by the function taking a generic argument that implements `Params`
-		/// (this trait).
-		///
-		/// ## Positional parameters
-		///
-		/// For cases where you want to pass a list of parameters where the number of
-		/// parameters is known at compile time, this can be done in one of the
-		/// following ways:
-		///
-		/// - For small lists of parameters up to 16 items, they may alternatively be
-		///   passed as a tuple, as in `thing.query((1, "foo"))`.
-		///   This is somewhat inconvenient for a single item, since you need a
-		///   weird-looking trailing comma: `thing.query(("example",))`. That case is
-		///   perhaps more cleanly expressed as `thing.query(["example"])`.
-		///
-		/// - Using the [`rusqlite::params!`](crate::params!) macro, e.g.
-		///   `thing.query(rusqlite::params![1, "foo", bar])`. This is mostly useful for
-		///   heterogeneous lists where the number of parameters greater than 16, or
-		///   homogeneous lists of parameters where the number of parameters exceeds 32.
-		///
-		/// - For small homogeneous lists of parameters, they can either be passed as:
-		///
-		///     - an array, as in `thing.query([1i32, 2, 3, 4])` or `thing.query(["foo",
-		///       "bar", "baz"])`.
-		///
-		///     - a reference to an array of references, as in `thing.query(&["foo",
-		///       "bar", "baz"])` or `thing.query(&[&1i32, &2, &3])`.
-		///       (Note: in this case we don't implement this for slices for coherence
-		///       reasons, so it really is only for the "reference to array" types —
-		///       hence why the number of parameters must be <= 32, or you need to
-		///       reach for `rusqlite::params!`)
-		///
-		///   Unfortunately, in the current design it's not possible to allow this for
-		///   references to arrays of non-references (e.g. `&[1i32, 2, 3]`). Code like
-		///   this should instead either use `params!`, an array literal, a `&[&dyn
-		///   ToSql]` or if none of those work, [`ParamsFromIter`].
-		///
-		/// - As a slice of `ToSql` trait object references, e.g. `&[&dyn ToSql]`. This
-		///   is mostly useful for passing parameter lists around as arguments without
-		///   having every function take a generic `P: Params`.
-		///
-		/// ### Example (positional)
-		///
-		/// ```rust,no_run
-		/// # use rusqlite::{Connection, Result, params};
-		/// fn update_rows(conn: &Connection) -> Result<()> {
-		///     let mut stmt = conn.prepare("INSERT INTO test (a, b) VALUES (?1, ?2)")?;
-		///
-		///     // Using a tuple:
-		///     stmt.execute((0, "foobar"))?;
-		///
-		///     // Using `rusqlite::params!`:
-		///     stmt.execute(params![1i32, "blah"])?;
-		///
-		///     // array literal — non-references
-		///     stmt.execute([2i32, 3i32])?;
-		///
-		///     // array literal — references
-		///     stmt.execute(["foo", "bar"])?;
-		///
-		///     // Slice literal, references:
-		///     stmt.execute(&[&2i32, &3i32])?;
-		///
-		///     // Note: The types behind the references don't have to be `Sized`
-		///     stmt.execute(&["foo", "bar"])?;
-		///
-		///     // However, this doesn't work (see above):
-		///     // stmt.execute(&[1i32, 2i32])?;
-		///     Ok(())
-		/// }
-		/// ```
-		///
-		/// ## Named parameters
-		///
-		/// SQLite lets you name parameters using a number of conventions (":foo",
-		/// "@foo", "$foo"). You can pass named parameters in to SQLite using rusqlite
-		/// in a few ways:
-		///
-		/// - Using the [`rusqlite::named_params!`](crate::named_params!) macro, as in
-		///   `stmt.execute(named_params!{ ":name": "foo", ":age": 99 })`. Similar to
-		///   the `params` macro, this is most useful for heterogeneous lists of
-		///   parameters, or lists where the number of parameters exceeds 32.
-		///
-		/// - As a slice of `&[(&str, &dyn ToSql)]`. This is what essentially all of
-		///   these boil down to in the end, conceptually at least. In theory, you can
-		///   pass this as `stmt`.
-		///
-		/// - As array references, similar to the positional params. This looks like
-		///   `thing.query(&[(":foo", &1i32), (":bar", &2i32)])` or
-		///   `thing.query(&[(":foo", "abc"), (":bar", "def")])`.
-		///
-		/// Note: Unbound named parameters will be left to the value they previously
-		/// were bound with, falling back to `NULL` for parameters which have never been
-		/// bound.
-		///
-		/// ### Example (named)
-		///
-		/// ```rust,no_run
-		/// # use rusqlite::{Connection, Result, named_params};
-		/// fn insert(conn: &Connection) -> Result<()> {
-		///     let mut stmt = conn.prepare("INSERT INTO test (key, value) VALUES (:key, :val)")?;
-		///     // Using `rusqlite::params!`:
-		///     stmt.execute(named_params! { ":key": "one", ":val": 2 })?;
-		///     // Alternatively:
-		///     stmt.execute(&[(":key", "three"), (":val", "four")])?;
-		///     // Or:
-		///     stmt.execute(&[(":key", &100), (":val", &200)])?;
-		///     Ok(())
-		/// }
-		/// ```
-		///
-		/// ## No parameters
-		///
-		/// You can just use an empty tuple or the empty array literal to run a query
-		/// that accepts no parameters.
-		///
-		/// ### Example (no parameters)
-		///
-		/// The empty tuple:
-		///
-		/// ```rust,no_run
-		/// # use rusqlite::{Connection, Result, params};
-		/// fn delete_all_users(conn: &Connection) -> Result<()> {
-		///     // You may also use `()`.
-		///     conn.execute("DELETE FROM users", ())?;
-		///     Ok(())
-		/// }
-		/// ```
-		///
-		/// The empty array:
-		///
-		/// ```rust,no_run
-		/// # use rusqlite::{Connection, Result, params};
-		/// fn delete_all_users(conn: &Connection) -> Result<()> {
-		///     // Just use an empty array (e.g. `[]`) for no params.
-		///     conn.execute("DELETE FROM users", [])?;
-		///     Ok(())
-		/// }
-		/// ```
-		///
-		/// ## Dynamic parameter list
-		///
-		/// If you have a number of parameters which is unknown at compile time (for
-		/// example, building a dynamic query at runtime), you have two choices:
-		///
-		/// - Use a `&[&dyn ToSql]`. This is often annoying to construct if you don't
-		///   already have this type on-hand.
-		/// - Use the [`ParamsFromIter`] type. This essentially lets you wrap an
-		///   iterator some `T: ToSql` with something that implements `Params`. The
-		///   usage of this looks like `rusqlite::params_from_iter(something)`.
-		///
-		/// A lot of the considerations here are similar either way, so you should see
-		/// the [`ParamsFromIter`] documentation for more info / examples.
-		pub trait Params: Sealed {
-			// XXX not public api, might not need to expose.
-			//
-			// Binds the parameters to the statement. It is unlikely calling this
-			// explicitly will do what you want. Please use `Statement::query` or
-			// similar directly.
-			//
-			// For now, just hide the function in the docs...
-			#[doc(hidden)]
+		use self::sealed::Sealed;
+		/// Trait used for [sets of parameter][params] passed into SQL statements/queries.
+		pub trait Params: Sealed
+        {
 			fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>;
 		}
-
-		// Explicitly impl for empty array. Critically, for `conn.execute([])` to be
-		// unambiguous, this must be the *only* implementation for an empty array.
-		//
-		// This sadly prevents `impl<T: ToSql, const N: usize> Params for [T; N]`, which
-		// forces people to use `params![...]` or `rusqlite::params_from_iter` for long
-		// homogeneous lists of parameters. This is not that big of a deal, but is
-		// unfortunate, especially because I mostly did it because I wanted a simple
-		// syntax for no-params that didn't require importing -- the empty tuple fits
-		// that nicely, but I didn't think of it until much later.
-		//
-		// Admittedly, if we did have the generic impl, then we *wouldn't* support the
-		// empty array literal as a parameter, since the `T` there would fail to be
-		// inferred. The error message here would probably be quite bad, and so on
-		// further thought, probably would end up causing *more* surprises, not less.
+        
 		impl Sealed for [&(dyn ToSql + Send + Sync); 0] {}
-		impl Params for [&(dyn ToSql + Send + Sync); 0] {
+		impl Params for [&(dyn ToSql + Send + Sync); 0]
+        {
 			#[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
 				stmt.ensure_parameter_count(0)
 			}
 		}
 
 		impl Sealed for &[&dyn ToSql] {}
-		impl Params for &[&dyn ToSql] {
-			#[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
-				stmt.bind_parameters(self)
-			}
+		impl Params for &[&dyn ToSql]
+        {
+			#[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
+            { stmt.bind_parameters(self) }
 		}
 
 		impl<S: BindIndex, T: ToSql> Sealed for &[(S, T)] {}
-		impl<S: BindIndex, T: ToSql> Params for &[(S, T)] {
+		impl<S: BindIndex, T: ToSql> Params for &[(S, T)]
+        {
 			#[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
 				stmt.bind_parameters_named(self)
 			}
 		}
-
-		// Manual impls for the empty and singleton tuple, although the rest are covered
-		// by macros.
+        
 		impl Sealed for () {}
-		impl Params for () {
+		impl Params for ()
+        {
 			#[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
 				stmt.ensure_parameter_count(0)
 			}
 		}
-
-		// I'm pretty sure you could tweak the `single_tuple_impl` to accept this.
+        
 		impl<T: ToSql> Sealed for (T,) {}
-		impl<T: ToSql> Params for (T,) {
+		impl<T: ToSql> Params for (T,)
+        {
 			#[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
 				stmt.ensure_parameter_count(1)?;
 				stmt.raw_bind_parameter(1, self.0)?;
@@ -9251,7 +8689,8 @@ pub mod sqlite3
 			}
 		}
 
-		macro_rules! single_tuple_impl {
+		macro_rules! single_tuple_impl
+        {
 			($count:literal : $(($field:tt $ftype:ident)),* $(,)?) => {
 				impl<$($ftype,)*> Sealed for ($($ftype,)*) where $($ftype: ToSql,)* {}
 				impl<$($ftype,)*> Params for ($($ftype,)*) where $($ftype: ToSql,)* {
@@ -9266,17 +8705,7 @@ pub mod sqlite3
 				}
 			}
 		}
-
-		// We use a macro for the rest, but don't bother with trying to implement it
-		// in a single invocation (it's possible to do, but my attempts were almost the
-		// same amount of code as just writing it out this way, and much more dense --
-		// it is a more complicated case than the TryFrom macro we have for row->tuple).
-		//
-		// Note that going up to 16 (rather than the 12 that the impls in the stdlib
-		// usually support) is just because we did the same in the `TryFrom<Row>` impl.
-		// I didn't catch that then, but there's no reason to remove it, and it seems
-		// nice to be consistent here; this way putting data in the database and getting
-		// data out of the database are more symmetric in a (mostly superficial) sense.
+        
 		single_tuple_impl!(2: (0 A), (1 B));
 		single_tuple_impl!(3: (0 A), (1 B), (2 C));
 		single_tuple_impl!(4: (0 A), (1 B), (2 C), (3 D));
@@ -9293,10 +8722,10 @@ pub mod sqlite3
 		single_tuple_impl!(15: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F), (6 G), (7 H), (8 I), (9 J), (10 K), (11 L), (12 M), (13 N), (14 O));
 		single_tuple_impl!(16: (0 A), (1 B), (2 C), (3 D), (4 E), (5 F), (6 G), (7 H), (8 I), (9 J), (10 K), (11 L), (12 M), (13 N), (14 O), (15 P));
 
-		macro_rules! impl_for_array_ref {
-			($($N:literal)+) => {$(
-				// These are already generic, and there's a shedload of them, so lets
-				// avoid the compile time hit from making them all inline for now.
+		macro_rules! impl_for_array_ref
+        {
+			($($N:literal)+) => 
+            {$(
 				impl<T: ToSql + ?Sized> Sealed for &[&T; $N] {}
 				impl<T: ToSql + ?Sized> Params for &[&T; $N] {
 					fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
@@ -9318,140 +8747,34 @@ pub mod sqlite3
 				}
 			)+};
 		}
-
-		// Following libstd/libcore's (old) lead, implement this for arrays up to `[_;
-		// 32]`. Note `[_; 0]` is intentionally omitted for coherence reasons, see the
-		// note above the impl of `[&dyn ToSql; 0]` for more information.
-		//
-		// Note that this unfortunately means we can't use const generics here, but I
-		// don't really think it matters -- users who hit that can use `params!` anyway.
+        
 		impl_for_array_ref!(
 			1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17
 			18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
 		);
-		/// Adapter type which allows any iterator over [`ToSql`] values to implement
-		/// [`Params`].
-		///
-		/// This struct is created by the [`params_from_iter`] function.
-		///
-		/// This can be useful if you have something like an `&[String]` (of unknown
-		/// length), and you want to use them with an API that wants something
-		/// implementing `Params`. This way, you can avoid having to allocate storage
-		/// for something like a `&[&dyn ToSql]`.
-		///
-		/// This essentially is only ever actually needed when dynamically generating
-		/// SQL — static SQL (by definition) has the number of parameters known
-		/// statically. As dynamically generating SQL is itself pretty advanced, this
-		/// API is itself for advanced use cases (See "Realistic use case" in the
-		/// examples).
-		///
-		/// # Example
-		///
-		/// ## Basic usage
-		///
-		/// ```rust,no_run
-		/// use rusqlite::{params_from_iter, Connection, Result};
-		/// use std::collections::BTreeSet;
-		///
-		/// fn query(conn: &Connection, ids: &BTreeSet<String>) -> Result<()> {
-		///     assert_eq!(ids.len(), 3, "Unrealistic sample code");
-		///
-		///     let mut stmt = conn.prepare("SELECT * FROM users WHERE id IN (?1, ?2, ?3)")?;
-		///     let _rows = stmt.query(params_from_iter(ids.iter()))?;
-		///
-		///     // use _rows...
-		///     Ok(())
-		/// }
-		/// ```
-		///
-		/// ## Realistic use case
-		///
-		/// Here's how you'd use `ParamsFromIter` to call [`Statement::exists`] with a
-		/// dynamic number of parameters.
-		///
-		/// ```rust,no_run
-		/// use rusqlite::{Connection, Result};
-		///
-		/// pub fn any_active_users(conn: &Connection, usernames: &[String]) -> Result<bool> {
-		///     if usernames.is_empty() {
-		///         return Ok(false);
-		///     }
-		///
-		///     // Note: `repeat_vars` never returns anything attacker-controlled, so
-		///     // it's fine to use it in a dynamically-built SQL string.
-		///     let vars = repeat_vars(usernames.len());
-		///
-		///     let sql = format!(
-		///         // In practice this would probably be better as an `EXISTS` query.
-		///         "SELECT 1 FROM user WHERE is_active AND name IN ({}) LIMIT 1",
-		///         vars,
-		///     );
-		///     let mut stmt = conn.prepare(&sql)?;
-		///     stmt.exists(rusqlite::params_from_iter(usernames))
-		/// }
-		///
-		/// // Helper function to return a comma-separated sequence of `?`.
-		/// // - `repeat_vars(0) => panic!(...)`
-		/// // - `repeat_vars(1) => "?"`
-		/// // - `repeat_vars(2) => "?,?"`
-		/// // - `repeat_vars(3) => "?,?,?"`
-		/// // - ...
-		/// fn repeat_vars(count: usize) -> String {
-		///     assert_ne!(count, 0);
-		///     let mut s = "?,".repeat(count);
-		///     // Remove trailing comma
-		///     s.pop();
-		///     s
-		/// }
-		/// ```
-		///
-		/// That is fairly complex, and even so would need even more work to be fully
-		/// production-ready:
-		///
-		/// - production code should ensure `usernames` isn't so large that it will
-		///   surpass [`conn.limit(Limit::SQLITE_LIMIT_VARIABLE_NUMBER)`][limits],
-		///   chunking if too large. (Note that the limits api requires rusqlite to have
-		///   the "limits" feature).
-		///
-		/// - `repeat_vars` can be implemented in a way that avoids needing to allocate
-		///   a String.
-		///
-		/// - Etc...
-		///
-		/// [limits]: crate::Connection::limit
-		///
-		/// This complexity reflects the fact that `ParamsFromIter` is mainly intended
-		/// for advanced use cases — most of the time you should know how many
-		/// parameters you have statically (and if you don't, you're either doing
-		/// something tricky, or should take a moment to think about the design).
+		/// Adapter type which allows any iterator over [`ToSql`] values to implement [`Params`].
 		#[derive(Clone, Debug)]
 		pub struct ParamsFromIter<I>(I);
-		/// Constructor function for a [`ParamsFromIter`]. See its documentation for
-		/// more.
-		#[inline]
-		pub fn params_from_iter<I>(iter: I) -> ParamsFromIter<I>
-		where
-			I: IntoIterator,
-			I::Item: ToSql,
+		/// Constructor function for a [`ParamsFromIter`]. See its documentation for more.
+		#[inline] pub fn params_from_iter<I>(iter: I) -> ParamsFromIter<I> where
+        I: IntoIterator,
+        I::Item: ToSql,
 		{
 			ParamsFromIter(iter)
 		}
 
-		impl<I> Sealed for ParamsFromIter<I>
-		where
+		impl<I> Sealed for ParamsFromIter<I> where
 			I: IntoIterator,
 			I::Item: ToSql,
 		{
 		}
 
-		impl<I> Params for ParamsFromIter<I>
-		where
-			I: IntoIterator,
-			I::Item: ToSql,
+		impl<I> Params for ParamsFromIter<I> where
+        I: IntoIterator,
+        I::Item: ToSql
 		{
-			#[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
-				stmt.bind_parameters(self.0)
-			}
+			#[inline] fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()>
+            { stmt.bind_parameters(self.0) }
 		}
 
     } pub use self::params::{params_from_iter, Params, ParamsFromIter};
@@ -9462,14 +8785,15 @@ pub mod sqlite3
         Pragma helpers */
         use ::
         {
+            ops::{ Deref },
+            sqlite3::
+            { 
+                types::{ ToSql, ToSqlOutput, ValueRef },    
+                *,
+            },
             *,
         };
         /*
-		use std::ops::Deref;
-
-		use crate::ffi;
-		use crate::types::{ToSql, ToSqlOutput, ValueRef};
-		use crate::{Connection, Result, Row};
         */
         pub struct Sql {
 			buf: String,
@@ -9490,7 +8814,8 @@ pub mod sqlite3
 				self.push_keyword(pragma_name)
 			}
 
-			pub fn push_keyword(&mut self, keyword: &str) -> Result<()> {
+			pub fn push_keyword(&mut self, keyword: &str) -> Result<()>
+            {
 				if !keyword.is_empty() && is_identifier(keyword) {
 					self.buf.push_str(keyword);
 					Ok(())
@@ -9600,19 +8925,12 @@ pub mod sqlite3
 
 		impl Connection {
 			/// Query the current value of `pragma_name`.
-			///
-			/// Some pragmas will return multiple rows/values which cannot be retrieved
-			/// with this method.
-			///
-			/// Prefer [PRAGMA function](https://sqlite.org/pragma.html#pragfunc) introduced in SQLite 3.20:
-			/// `SELECT user_version FROM pragma_user_version;`
 			pub fn pragma_query_value<T, F>(
 				&self,
 				schema_name: Option<&str>,
 				pragma_name: &str,
 				f: F,
-			) -> Result<T>
-			where
+			) -> Result<T> where
 				F: FnOnce(&Row<'_>) -> Result<T>,
 			{
 				let mut query = Sql::new();
@@ -9620,16 +8938,12 @@ pub mod sqlite3
 				self.query_row(&query, [], f)
 			}
 			/// Query the current rows/values of `pragma_name`.
-			///
-			/// Prefer [PRAGMA function](https://sqlite.org/pragma.html#pragfunc) introduced in SQLite 3.20:
-			/// `SELECT * FROM pragma_collation_list;`
 			pub fn pragma_query<F>(
 				&self,
 				schema_name: Option<&str>,
 				pragma_name: &str,
 				mut f: F,
-			) -> Result<()>
-			where
+			) -> Result<()> where
 				F: FnMut(&Row<'_>) -> Result<()>,
 			{
 				let mut query = Sql::new();
@@ -9642,31 +8956,19 @@ pub mod sqlite3
 				}
 				Ok(())
 			}
-			/// Query the current value(s) of `pragma_name` associated to
-			/// `pragma_value`.
-			///
-			/// This method can be used with query-only pragmas which need an argument
-			/// (e.g. `table_info('one_tbl')`) or pragmas which returns value(s)
-			/// (e.g. `integrity_check`).
-			///
-			/// Prefer [PRAGMA function](https://sqlite.org/pragma.html#pragfunc) introduced in SQLite 3.20:
-			/// `SELECT * FROM pragma_table_info(?1);`
+			/// Query the current value(s) of `pragma_name` associated to `pragma_value`.
 			pub fn pragma<F, V>(
 				&self,
 				schema_name: Option<&str>,
 				pragma_name: &str,
 				pragma_value: V,
 				mut f: F,
-			) -> Result<()>
-			where
+			) -> Result<()> where
 				F: FnMut(&Row<'_>) -> Result<()>,
 				V: ToSql,
 			{
 				let mut sql = Sql::new();
 				sql.push_pragma(schema_name, pragma_name)?;
-				// The argument may be either in parentheses
-				// or it may be separated from the pragma name by an equal sign.
-				// The two syntaxes yield identical results.
 				sql.open_brace();
 				sql.push_value(&pragma_value)?;
 				sql.close_brace();
@@ -9679,56 +8981,46 @@ pub mod sqlite3
 				Ok(())
 			}
 			/// Set a new value to `pragma_name`.
-			///
-			/// Some pragmas will return the updated value which cannot be retrieved
-			/// with this method.
 			pub fn pragma_update<V>(
 				&self,
 				schema_name: Option<&str>,
 				pragma_name: &str,
 				pragma_value: V,
-			) -> Result<()>
-			where
+			) -> Result<()> where
 				V: ToSql,
 			{
 				let mut sql = Sql::new();
 				sql.push_pragma(schema_name, pragma_name)?;
-				// The argument may be either in parentheses
-				// or it may be separated from the pragma name by an equal sign.
-				// The two syntaxes yield identical results.
 				sql.push_equal_sign();
 				sql.push_value(&pragma_value)?;
 				self.execute_batch(&sql)
 			}
 			/// Set a new value to `pragma_name` and return the updated value.
-			///
-			/// Only few pragmas automatically return the updated value.
 			pub fn pragma_update_and_check<F, T, V>(
 				&self,
 				schema_name: Option<&str>,
 				pragma_name: &str,
 				pragma_value: V,
 				f: F,
-			) -> Result<T>
-			where
+			) -> Result<T> where
 				F: FnOnce(&Row<'_>) -> Result<T>,
 				V: ToSql,
 			{
 				let mut sql = Sql::new();
 				sql.push_pragma(schema_name, pragma_name)?;
-				// The argument may be either in parentheses
-				// or it may be separated from the pragma name by an equal sign.
-				// The two syntaxes yield identical results.
 				sql.push_equal_sign();
 				sql.push_value(&pragma_value)?;
 				self.query_row(&sql, [], f)
 			}
 		}
 
-		fn is_identifier(s: &str) -> bool {
+		fn is_identifier(s: &str) -> bool
+        {
 			let chars = s.char_indices();
-			for (i, ch) in chars {
-				if i == 0 {
+			for (i, ch) in chars
+            {
+				if i == 0
+                {
 					if !is_identifier_start(ch) {
 						return false;
 					}
@@ -9759,15 +9051,18 @@ pub mod sqlite3
         */
         use ::
         {
+            fallible::
+            {
+                iterator::{ FallibleIterator, streams::{ FallibleStreamingIterator } },
+            },
+            sqlite3::
+            {
+                types::{FromSql, FromSqlError, ValueRef},
+                *
+            },
             *,
         };
         /*
-		use fallible::iterator::FallibleIterator;
-		use fallible_streaming_iterator::FallibleStreamingIterator;
-		use std::convert;
-
-		use super::{Error, Result, Statement};
-		use crate::types::{FromSql, FromSqlError, ValueRef};
         */
 		/// A handle (lazy fallible streaming iterator) for the resulting rows of a query.
 		#[must_use = "Rows is lazy and will do nothing unless consumed"]
@@ -9776,52 +9071,32 @@ pub mod sqlite3
 			row: Option<Row<'stmt>>,
 		}
 
-		impl<'stmt> Rows<'stmt> {
-			#[inline] fn reset(&mut self) -> Result<()> {
+		impl<'stmt> Rows<'stmt>
+        {
+			#[inline] fn reset(&mut self) -> Result<()>
+            {
 				if let Some(stmt) = self.stmt.take() {
 					stmt.reset()
 				} else {
 					Ok(())
 				}
 			}
-			/// Attempt to get the next row from the query. Returns `Ok(Some(Row))` if
-			/// there is another row, `Err(...)` if there was an error
-			/// getting the next row, and `Ok(None)` if all rows have been retrieved.
-			///
-			/// ## Note
-			///
-			/// This interface is not compatible with Rust's `Iterator` trait, because
-			/// the lifetime of the returned row is tied to the lifetime of `self`.
-			/// This is a fallible "streaming iterator". For a more natural interface,
-			/// consider using [`query_map`](Statement::query_map) or
-			/// [`query_and_then`](Statement::query_and_then) instead, which
-			/// return types that implement `Iterator`.
-			#[expect(clippy::should_implement_trait)] // cannot implement Iterator
+			/// Attempt to get the next row from the query.
+			#[expect(clippy::should_implement_trait)]
 			#[inline] pub fn next(&mut self) -> Result<Option<&Row<'stmt>>> {
 				self.advance()?;
 				Ok((*self).get())
 			}
 			/// Map over this `Rows`, converting it to a [`Map`], which
 			/// implements `FallibleIterator`.
-			/// ```rust,no_run
-			/// use fallible::iterator::FallibleIterator;
-			/// # use rusqlite::{Result, Statement};
-			/// fn query(stmt: &mut Statement) -> Result<Vec<i64>> {
-			///     let rows = stmt.query([])?;
-			///     rows.map(|r| r.get(0)).collect()
-			/// }
-			/// ```
-			// FIXME Hide FallibleStreamingIterator::map
-			#[inline] pub fn map<F, B>(self, f: F) -> Map<'stmt, F>
-			where
+			#[inline] pub fn map<F, B>(self, f: F) -> Map<'stmt, F> where
 				F: FnMut(&Row<'_>) -> Result<B>,
 			{
 				Map { rows: self, f }
 			}
 			/// Map over this `Rows`, converting it to a [`MappedRows`], which
 			/// implements `Iterator`.
-			#[inline] pub fn mapped<F, B>(self, f: F) -> MappedRows<'stmt, F>
-			where
+			#[inline] pub fn mapped<F, B>(self, f: F) -> MappedRows<'stmt, F> where
 				F: FnMut(&Row<'_>) -> Result<B>,
 			{
 				MappedRows { rows: self, map: f }
@@ -9829,8 +9104,7 @@ pub mod sqlite3
 			/// Map over this `Rows` with a fallible function, converting it to a
 			/// [`AndThenRows`], which implements `Iterator` (instead of
 			/// `FallibleStreamingIterator`).
-			#[inline] pub fn and_then<F, T, E>(self, f: F) -> AndThenRows<'stmt, F>
-			where
+			#[inline] pub fn and_then<F, T, E>(self, f: F) -> AndThenRows<'stmt, F> where
 				F: FnMut(&Row<'_>) -> Result<T, E>,
 			{
 				AndThenRows { rows: self, map: f }
@@ -9842,17 +9116,16 @@ pub mod sqlite3
 			}
 		}
 
-		impl<'stmt> Rows<'stmt> {
-			#[inline]
-			pub fn new(stmt: &'stmt Statement<'stmt>) -> Self {
+		impl<'stmt> Rows<'stmt>
+        {
+			#[inline] pub fn new(stmt: &'stmt Statement<'stmt>) -> Self {
 				Rows {
 					stmt: Some(stmt),
 					row: None,
 				}
 			}
 
-			#[inline]
-			pub fn get_expected_row(&mut self) -> Result<&Row<'stmt>> {
+			#[inline] pub fn get_expected_row(&mut self) -> Result<&Row<'stmt>> {
 				match self.next()? {
 					Some(row) => Ok(row),
 					None => Err(Error::QueryReturnedNoRows),
@@ -9865,16 +9138,14 @@ pub mod sqlite3
 				self.reset();
 			}
 		}
-		/// `F` is used to transform the _streaming_ iterator into a _fallible_
-		/// iterator.
+		/// `F` is used to transform the _streaming_ iterator into a _fallible_iterator.
 		#[must_use = "iterators are lazy and do nothing unless consumed"]
 		pub struct Map<'stmt, F> {
 			rows: Rows<'stmt>,
 			f: F,
 		}
 
-		impl<F, B> FallibleIterator for Map<'_, F>
-		where
+		impl<F, B> FallibleIterator for Map<'_, F> where
 			F: FnMut(&Row<'_>) -> Result<B>,
 		{
 			type Error = Error;
@@ -9888,17 +9159,13 @@ pub mod sqlite3
 			}
 		}
 		/// An iterator over the mapped resulting rows of a query.
-		///
-		/// `F` is used to transform the _streaming_ iterator into a _standard_
-		/// iterator.
 		#[must_use = "iterators are lazy and do nothing unless consumed"]
 		pub struct MappedRows<'stmt, F> {
 			rows: Rows<'stmt>,
 			map: F,
 		}
 
-		impl<T, F> Iterator for MappedRows<'_, F>
-		where
+		impl<T, F> Iterator for MappedRows<'_, F> where
 			F: FnMut(&Row<'_>) -> Result<T>,
 		{
 			type Item = Result<T>;
@@ -9920,8 +9187,7 @@ pub mod sqlite3
 			map: F,
 		}
 
-		impl<T, E, F> Iterator for AndThenRows<'_, F>
-		where
+		impl<T, E, F> Iterator for AndThenRows<'_, F> where
 			E: From<Error>,
 			F: FnMut(&Row<'_>) -> Result<T, E>,
 		{
@@ -9941,24 +9207,13 @@ pub mod sqlite3
 		/// * each call to `next` (`sqlite3_step`) can fail.
 		/// * returned `Row` is valid until `next` is called again or `Statement` is
 		///   reset or finalized.
-		///
-		/// While these iterators cannot be used with Rust `for` loops, `while let`
-		/// loops offer a similar level of ergonomics:
-		/// ```rust,no_run
-		/// # use rusqlite::{Result, Statement};
-		/// fn query(stmt: &mut Statement) -> Result<()> {
-		///     let mut rows = stmt.query([])?;
-		///     while let Some(row) = rows.next()? {
-		///         // scan columns value
-		///     }
-		///     Ok(())
-		/// }
-		/// ```
-		impl<'stmt> FallibleStreamingIterator for Rows<'stmt> {
+		impl<'stmt> FallibleStreamingIterator for Rows<'stmt>
+        {
 			type Error = Error;
 			type Item = Row<'stmt>;
 
-			#[inline] fn advance(&mut self) -> Result<()> {
+			#[inline] fn advance(&mut self) -> Result<()>
+            {
 				if let Some(stmt) = self.stmt {
 					match stmt.step() {
 						Ok(true) => {
@@ -9971,7 +9226,7 @@ pub mod sqlite3
 							r
 						}
 						Err(e) => {
-							let _ = self.reset(); // prevents infinite loop on error
+							let _ = self.reset();
 							self.row = None;
 							Err(e)
 						}
@@ -9993,39 +9248,11 @@ pub mod sqlite3
 
 		impl Row<'_> {
 			/// Get the value of a particular column of the result row.
-			///
-			/// # Panics
-			///
-			/// Panics if calling [`row.get(idx)`](Row::get) would return an error,
-			/// including:
-			///
-			/// * If the underlying SQLite column type is not a valid type as a source
-			///   for `T`
-			/// * If the underlying SQLite integral value is outside the range
-			///   representable by `T`
-			/// * If `idx` is outside the range of columns in the returned query
-			#[track_caller]
-			pub fn get_unwrap<I: RowIndex, T: FromSql>(&self, idx: I) -> T {
+			#[track_caller] pub fn get_unwrap<I: RowIndex, T: FromSql>(&self, idx: I) -> T {
 				self.get(idx).unwrap()
 			}
 			/// Get the value of a particular column of the result row.
-			///
-			/// ## Failure
-			///
-			/// Returns an `Error::InvalidColumnType` if the underlying SQLite column
-			/// type is not a valid type as a source for `T`.
-			///
-			/// Returns an `Error::InvalidColumnIndex` if `idx` is outside the valid
-			/// column range for this row.
-			///
-			/// Returns an `Error::InvalidColumnName` if `idx` is not a valid column
-			/// name for this row.
-			///
-			/// If the result type is i128 (which requires the `i128_blob` feature to be
-			/// enabled), and the underlying SQLite column is a blob whose size is not
-			/// 16 bytes, `Error::InvalidColumnType` will also be returned.
-			#[track_caller]
-			pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T>
+			#[track_caller] pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T>
             {
 				let idx = idx.idx(self.stmt)?;
 				let value = self.stmt.value_ref(idx);
@@ -10046,50 +9273,21 @@ pub mod sqlite3
 			}
 			/// Get the value of a particular column of the result row as a `ValueRef`,
 			/// allowing data to be read out of a row without copying.
-			///
-			/// This `ValueRef` is valid only as long as this Row, which is enforced by
-			/// its lifetime. This means that while this method is completely safe,
-			/// it can be somewhat difficult to use, and most callers will be better
-			/// served by [`get`](Row::get) or [`get_unwrap`](Row::get_unwrap).
-			///
-			/// ## Failure
-			///
-			/// Returns an `Error::InvalidColumnIndex` if `idx` is outside the valid
-			/// column range for this row.
-			///
-			/// Returns an `Error::InvalidColumnName` if `idx` is not a valid column
-			/// name for this row.
 			pub fn get_ref<I: RowIndex>(&self, idx: I) -> Result<ValueRef<'_>>
             {
 				let idx = idx.idx(self.stmt)?;
-				// Narrowing from `ValueRef<'stmt>` (which `self.stmt.value_ref(idx)`
-				// returns) to `ValueRef<'a>` is needed because it's only valid until
-				// the next call to sqlite3_step.
 				let val_ref = self.stmt.value_ref(idx);
 				Ok(val_ref)
 			}
 			/// Get the value of a particular column of the result row as a `ValueRef`,
 			/// allowing data to be read out of a row without copying.
-			///
-			/// This `ValueRef` is valid only as long as this Row, which is enforced by
-			/// its lifetime. This means that while this method is completely safe,
-			/// it can be difficult to use, and most callers will be better served by
-			/// [`get`](Row::get) or [`get_unwrap`](Row::get_unwrap).
-			///
-			/// # Panics
-			///
-			/// Panics if calling [`row.get_ref(idx)`](Row::get_ref) would return an
-			/// error, including:
-			///
-			/// * If `idx` is outside the range of columns in the returned query.
-			/// * If `idx` is not a valid column name for this row.
-			#[track_caller]
-			pub fn get_ref_unwrap<I: RowIndex>(&self, idx: I) -> ValueRef<'_> {
+			#[track_caller] pub fn get_ref_unwrap<I: RowIndex>(&self, idx: I) -> ValueRef<'_> {
 				self.get_ref(idx).unwrap()
 			}
 		}
 
-		impl<'stmt> AsRef<Statement<'stmt>> for Row<'stmt> {
+		impl<'stmt> AsRef<Statement<'stmt>> for Row<'stmt>
+        {
 			fn as_ref(&self) -> &Statement<'stmt> {
 				self.stmt
 			}
@@ -10097,7 +9295,8 @@ pub mod sqlite3
 		/// Debug `Row` like an ordered `Map<Result<&str>, Result<(Type, ValueRef)>>`
 		/// with column name as key except that for `Type::Blob` only its size is
 		/// printed (not its content).
-		impl ::fmt::Debug for Row<'_> {
+		impl ::fmt::Debug for Row<'_>
+        {
 			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 				let mut dm = f.debug_map();
 				for c in 0..self.stmt.column_count() {
@@ -10142,16 +9341,15 @@ pub mod sqlite3
 			impl Sealed for &str {}
 		}
 		/// A trait implemented by types that can index into columns of a row.
-		///
-		/// It is only implemented for `usize` and `&str`.
 		pub trait RowIndex: sealed::Sealed {
-			/// Returns the index of the appropriate column, or `Error` if no such
-			/// column exists.
+			/// Returns the index of the appropriate column, or `Error` if no such column exists.
 			fn idx(&self, stmt: &Statement<'_>) -> Result<usize>;
 		}
 
-		impl RowIndex for usize {
-			#[inline] fn idx(&self, stmt: &Statement<'_>) -> Result<usize> {
+		impl RowIndex for usize
+        {
+			#[inline] fn idx(&self, stmt: &Statement<'_>) -> Result<usize>
+            {
 				if *self >= stmt.column_count() {
 					Err(Error::InvalidColumnIndex(*self))
 				} else {
@@ -10160,7 +9358,8 @@ pub mod sqlite3
 			}
 		}
 
-		impl RowIndex for &'_ str {
+		impl RowIndex for &'_ str
+        {
 			#[inline] fn idx(&self, stmt: &Statement<'_>) -> Result<usize> {
 				stmt.column_index(self)
 			}
@@ -10170,9 +9369,7 @@ pub mod sqlite3
 			($($field:ident),*) => {
 				impl<'a, $($field,)*> convert::TryFrom<&'a Row<'a>> for ($($field,)*) where $($field: FromSql,)* {
 					type Error = crate::Error;
-
-					// we end with index += 1, which rustc warns about
-					// unused_variables and unused_mut are allowed for ()
+                    
 					#[allow(unused_assignments, unused_variables, unused_mut)]
 					fn try_from(row: &'a Row<'a>) -> Result<Self> {
 						let mut index = 0;
@@ -10189,7 +9386,6 @@ pub mod sqlite3
 
 		macro_rules! tuples_try_from_row {
 			() => {
-				// not very useful, but maybe some other macro users will find this helpful
 				tuple_try_from_row!();
 			};
 			($first:ident $(, $remaining:ident)*) => {
@@ -10208,12 +9404,18 @@ pub mod sqlite3
         */
         use ::
         {
+            ffi::{c_int, c_void},
+            slice::{ from_raw_parts },
+            sqlite3::
+            {
+                bind::{ BindIndex },
+                types::{ToSql, ToSqlOutput},
+                *,
+            },
             *,
         };
         /*
 		use std::ffi::{c_int, c_void};
-		#[cfg(feature = "array")]
-		use std::rc::Rc;
 		use std::slice::from_raw_parts;
 		use std::{fmt, mem, ptr, str};
 
@@ -10224,8 +9426,6 @@ pub mod sqlite3
 		};
 		use crate::bind::BindIndex;
 		use crate::types::{ToSql, ToSqlOutput};
-		#[cfg(feature = "array")]
-		use crate::vtab::array::{free_array, ARRAY_TYPE};
 
         */
 		//pub mod raw_statement
@@ -10235,40 +9435,28 @@ pub mod sqlite3
 			*/
 			use ::
 			{
+                ffi::{c_int, CStr},
+                sqlite3::
+                {
+                    util::{ ParamIndexCache, SqliteMallocString },
+                    *,
+                },
+                sync::{ Arc },
 				*,
 			};
 			/*
-			use super::ffi;
-			use super::StatementStatus;
-			use crate::util::ParamIndexCache;
-			use crate::util::SqliteMallocString;
-			use std::ffi::{c_int, CStr};
-			use std::ptr;
-			use std::sync::Arc;
 			*/
 			/// Private newtype for raw sqlite3_stmts that finalize themselves when dropped.
 			#[derive(Debug)]
 			pub struct RawStatement
 			{
 				ptr: *mut sqlite3_stmt,
-				// Cached indices of named parameters, computed on the fly.
 				cache: ParamIndexCache,
-				// Cached SQL (trimmed) that we use as the key when we're in the statement
-				// cache. This is None for statements which didn't come from the statement
-				// cache.
-				//
-				// This is probably the same as `self.sql()` in most cases, but we don't
-				// care either way -- It's a better cache key as it is anyway since it's the
-				// actual source we got from rust.
-				//
-				// One example of a case where the result of `sqlite_sql` and the value in
-				// `statement_cache_key` might differ is if the statement has a `tail`.
 				statement_cache_key: Option<Arc<str>>,
 			}
 
 			impl RawStatement {
-				#[inline]
-				pub unsafe fn new(stmt: *mut sqlite3_stmt) -> Self {
+				#[inline] pub unsafe fn new(stmt: *mut sqlite3_stmt) -> Self {
 					Self {
 						ptr: stmt,
 						cache: ParamIndexCache::default(),
@@ -10276,99 +9464,39 @@ pub mod sqlite3
 					}
 				}
 
-				#[inline]
-				pub fn is_null(&self) -> bool {
+				#[inline] pub fn is_null(&self) -> bool {
 					self.ptr.is_null()
 				}
 
-				#[inline]
-				pub fn set_statement_cache_key(&mut self, p: impl Into<Arc<str>>) {
+				#[inline] pub fn set_statement_cache_key(&mut self, p: impl Into<Arc<str>>) {
 					self.statement_cache_key = Some(p.into());
 				}
 
-				#[inline]
-				pub fn statement_cache_key(&self) -> Option<Arc<str>> {
+				#[inline] pub fn statement_cache_key(&self) -> Option<Arc<str>>
+                {
 					self.statement_cache_key.clone()
 				}
 
-				#[inline]
-				pub unsafe fn ptr(&self) -> *mut sqlite3_stmt {
+				#[inline] pub unsafe fn ptr(&self) -> *mut sqlite3_stmt {
 					self.ptr
 				}
 
-				#[inline]
-				pub fn column_count(&self) -> usize {
+				#[inline] pub fn column_count(&self) -> usize {
 					// Note: Can't cache this as it changes if the schema is altered.
 					unsafe { sqlite3_column_count(self.ptr) as usize }
 				}
 
-				#[inline]
-				pub fn column_type(&self, idx: usize) -> c_int {
+				#[inline] pub fn column_type(&self, idx: usize) -> c_int {
 					unsafe { sqlite3_column_type(self.ptr, idx as c_int) }
 				}
 
-				#[inline]
-				#[cfg(feature = "column_metadata")]
-				pub fn column_database_name(&self, idx: usize) -> Option<&CStr> {
-					unsafe {
-						let db_name = sqlite3_column_database_name(self.ptr, idx as c_int);
-						if db_name.is_null() {
-							None
-						} else {
-							Some(CStr::from_ptr(db_name))
-						}
-					}
-				}
-
-				#[inline]
-				#[cfg(feature = "column_metadata")]
-				pub fn column_table_name(&self, idx: usize) -> Option<&CStr> {
-					unsafe {
-						let tbl_name = sqlite3_column_table_name(self.ptr, idx as c_int);
-						if tbl_name.is_null() {
-							None
-						} else {
-							Some(CStr::from_ptr(tbl_name))
-						}
-					}
-				}
-
-				#[inline]
-				#[cfg(feature = "column_metadata")]
-				pub fn column_origin_name(&self, idx: usize) -> Option<&CStr> {
-					unsafe {
-						let origin_name = sqlite3_column_origin_name(self.ptr, idx as c_int);
-						if origin_name.is_null() {
-							None
-						} else {
-							Some(CStr::from_ptr(origin_name))
-						}
-					}
-				}
-
-				#[inline]
-				#[cfg(feature = "column_decltype")]
-				pub fn column_decltype(&self, idx: usize) -> Option<&CStr> {
-					unsafe {
-						let decltype = sqlite3_column_decltype(self.ptr, idx as c_int);
-						if decltype.is_null() {
-							None
-						} else {
-							Some(CStr::from_ptr(decltype))
-						}
-					}
-				}
-
-				#[inline]
-				pub fn column_name(&self, idx: usize) -> Option<&CStr> {
+				#[inline] pub fn column_name(&self, idx: usize) -> Option<&CStr> {
 					let idx = idx as c_int;
 					if idx < 0 || idx >= self.column_count() as c_int {
 						return None;
 					}
 					unsafe {
 						let ptr = sqlite3_column_name(self.ptr, idx);
-						// If ptr is null here, it's an OOM, so there's probably nothing
-						// meaningful we can do. Just assert instead of returning None.
 						assert!(
 							!ptr.is_null(),
 							"Null pointer from sqlite3_column_name: Out of memory?"
@@ -10377,53 +9505,20 @@ pub mod sqlite3
 					}
 				}
 
-				#[inline]
-				#[cfg(not(feature = "unlock_notify"))]
-				pub fn step(&self) -> c_int {
+				#[inline] pub fn step(&self) -> c_int {
 					unsafe { sqlite3_step(self.ptr) }
 				}
-
-				#[cfg(feature = "unlock_notify")]
-				pub fn step(&self) -> c_int {
-					use crate::unlock_notify;
-					let mut db = ptr::null_mut::<ffi::sqlite3>();
-					loop {
-						unsafe {
-							let mut rc = sqlite3_step(self.ptr);
-							// Bail out early for success and errors unrelated to locking. We
-							// still need check `is_locked` after this, but checking now lets us
-							// avoid one or two (admittedly cheap) calls into SQLite that we
-							// don't need to make.
-							if (rc & 0xff) != SQLITE_LOCKED {
-								break rc;
-							}
-							if db.is_null() {
-								db = sqlite3_db_handle(self.ptr);
-							}
-							if !unlock_notify::is_locked(db, rc) {
-								break rc;
-							}
-							rc = unlock_notify::wait_for_unlock_notify(db);
-							if rc != SQLITE_OK {
-								break rc;
-							}
-							self.reset();
-						}
-					}
-				}
-
-				#[inline]
-				pub fn reset(&self) -> c_int {
+                
+				#[inline] pub fn reset(&self) -> c_int {
 					unsafe { sqlite3_reset(self.ptr) }
 				}
 
-				#[inline]
-				pub fn bind_parameter_count(&self) -> usize {
+				#[inline] pub fn bind_parameter_count(&self) -> usize {
 					unsafe { sqlite3_bind_parameter_count(self.ptr) as usize }
 				}
 
-				#[inline]
-				pub fn bind_parameter_index(&self, name: &str) -> Option<usize> {
+				#[inline] pub fn bind_parameter_index(&self, name: &str) -> Option<usize>
+                {
 					self.cache.get_or_insert_with(name, |param_cstr| {
 						let r = unsafe { sqlite3_bind_parameter_index(self.ptr, param_cstr.as_ptr()) };
 						match r {
@@ -10433,8 +9528,7 @@ pub mod sqlite3
 					})
 				}
 
-				#[inline]
-				pub fn bind_parameter_name(&self, index: i32) -> Option<&CStr> {
+				#[inline] pub fn bind_parameter_name(&self, index: i32) -> Option<&CStr> {
 					unsafe {
 						let name = sqlite3_bind_parameter_name(self.ptr, index);
 						if name.is_null() {
@@ -10445,15 +9539,14 @@ pub mod sqlite3
 					}
 				}
 
-				#[inline]
-				pub fn clear_bindings(&mut self) {
+				#[inline] pub fn clear_bindings(&mut self) {
 					unsafe {
 						sqlite3_clear_bindings(self.ptr);
-					} // rc is always SQLITE_OK
+					}
 				}
 
-				#[inline]
-				pub fn sql(&self) -> Option<&CStr> {
+				#[inline] pub fn sql(&self) -> Option<&CStr>
+                {
 					if self.ptr.is_null() {
 						None
 					} else {
@@ -10461,49 +9554,40 @@ pub mod sqlite3
 					}
 				}
 
-				#[inline]
-				pub fn finalize(mut self) -> c_int {
+				#[inline] pub fn finalize(mut self) -> c_int {
 					self.finalize_()
 				}
 
-				#[inline]
-				fn finalize_(&mut self) -> c_int {
+				#[inline] fn finalize_(&mut self) -> c_int {
 					let r = unsafe { sqlite3_finalize(self.ptr) };
 					self.ptr = ptr::null_mut();
 					r
 				}
 
 				// does not work for PRAGMA
-				#[inline]
-				pub fn readonly(&self) -> bool {
+				#[inline] pub fn readonly(&self) -> bool {
 					unsafe { sqlite3_stmt_readonly(self.ptr) != 0 }
 				}
 
-				#[inline]
-				pub fn expanded_sql(&self) -> Option<SqliteMallocString> {
+				#[inline] pub fn expanded_sql(&self) -> Option<SqliteMallocString> {
 					unsafe { expanded_sql(self.ptr) }
 				}
 
-				#[inline]
-				pub fn get_status(&self, status: StatementStatus, reset: bool) -> i32 {
+				#[inline] pub fn get_status(&self, status: StatementStatus, reset: bool) -> i32 {
 					unsafe { stmt_status(self.ptr, status, reset) }
 				}
 
-				#[inline]
-				#[cfg(feature = "modern_sqlite")] // 3.28.0
-				pub fn is_explain(&self) -> i32 {
+				#[inline] pub fn is_explain(&self) -> i32 {
 					unsafe { sqlite3_stmt_isexplain(self.ptr) }
 				}
 
-				// TODO sqlite3_normalized_sql (https://sqlite.org/c3ref/expanded_sql.html) // 3.27.0 + SQLITE_ENABLE_NORMALIZE
+				// TODO sqlite3_normalized_sql (https://sqlite.org/c3ref/expanded_sql.html)
 			}
 
-			#[inline]
-			pub unsafe fn expanded_sql(ptr: *mut sqlite3_stmt) -> Option<SqliteMallocString> {
+			#[inline] pub unsafe fn expanded_sql(ptr: *mut sqlite3_stmt) -> Option<SqliteMallocString> {
 				SqliteMallocString::from_raw(sqlite3_expanded_sql(ptr))
 			}
-			#[inline]
-			pub unsafe fn stmt_status(
+			#[inline] pub unsafe fn stmt_status(
 				ptr: *mut sqlite3_stmt,
 				status: StatementStatus,
 				reset: bool,
@@ -10529,109 +9613,11 @@ pub mod sqlite3
 
 		impl Statement<'_> {
 			/// Execute the prepared statement.
-			///
-			/// On success, returns the number of rows that were changed or inserted or
-			/// deleted (via `sqlite3_changes`).
-			///
-			/// ## Example
-			///
-			/// ### Use with positional parameters
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result, params};
-			/// fn update_rows(conn: &Connection) -> Result<()> {
-			///     let mut stmt = conn.prepare("UPDATE foo SET bar = ?1 WHERE qux = ?2")?;
-			///     // For a single parameter, or a parameter where all the values have
-			///     // the same type, just passing an array is simplest.
-			///     stmt.execute([2i32])?;
-			///     // The `rusqlite::params!` macro is mostly useful when the parameters do not
-			///     // all have the same type, or if there are more than 32 parameters
-			///     // at once, but it can be used in other cases.
-			///     stmt.execute(params![1i32])?;
-			///     // However, it's not required, many cases are fine as:
-			///     stmt.execute(&[&2i32])?;
-			///     // Or even:
-			///     stmt.execute([2i32])?;
-			///     // If you really want to, this is an option as well.
-			///     stmt.execute((2i32,))?;
-			///     Ok(())
-			/// }
-			/// ```
-			///
-			/// #### Heterogeneous positional parameters
-			///
-			/// ```
-			/// use rusqlite::{Connection, Result};
-			/// fn store_file(conn: &Connection, path: &str, data: &[u8]) -> Result<()> {
-			///     # // no need to do it for real.
-			///     # fn sha256(_: &[u8]) -> [u8; 32] { [0; 32] }
-			///     let query = "INSERT OR REPLACE INTO files(path, hash, data) VALUES (?1, ?2, ?3)";
-			///     let mut stmt = conn.prepare_cached(query)?;
-			///     let hash: [u8; 32] = sha256(data);
-			///     // The easiest way to pass positional parameters of have several
-			///     // different types is by using a tuple.
-			///     stmt.execute((path, hash, data))?;
-			///     // Using the `params!` macro also works, and supports longer parameter lists:
-			///     stmt.execute(rusqlite::params![path, hash, data])?;
-			///     Ok(())
-			/// }
-			/// # let c = Connection::open_in_memory().unwrap();
-			/// # c.execute_batch("CREATE TABLE files(path TEXT PRIMARY KEY, hash BLOB, data BLOB)").unwrap();
-			/// # store_file(&c, "foo/bar.txt", b"bibble").unwrap();
-			/// # store_file(&c, "foo/baz.txt", b"bobble").unwrap();
-			/// ```
-			///
-			/// ### Use with named parameters
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result, named_params};
-			/// fn insert(conn: &Connection) -> Result<()> {
-			///     let mut stmt = conn.prepare("INSERT INTO test (key, value) VALUES (:key, :value)")?;
-			///     // The `rusqlite::named_params!` macro (like `params!`) is useful for heterogeneous
-			///     // sets of parameters (where all parameters are not the same type), or for queries
-			///     // with many (more than 32) statically known parameters.
-			///     stmt.execute(named_params! { ":key": "one", ":val": 2 })?;
-			///     // However, named parameters can also be passed like:
-			///     stmt.execute(&[(":key", "three"), (":val", "four")])?;
-			///     // Or even: (note that a &T is required for the value type, currently)
-			///     stmt.execute(&[(":key", &100), (":val", &200)])?;
-			///     Ok(())
-			/// }
-			/// ```
-			///
-			/// ### Use without parameters
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result, params};
-			/// fn delete_all(conn: &Connection) -> Result<()> {
-			///     let mut stmt = conn.prepare("DELETE FROM users")?;
-			///     stmt.execute([])?;
-			///     Ok(())
-			/// }
-			/// ```
-			///
-			/// # Failure
-			///
-			/// Will return `Err` if binding parameters fails, the executed statement
-			/// returns rows (in which case `query` should be used instead), or the
-			/// underlying SQLite call fails.
 			#[inline] pub fn execute<P: Params>(&mut self, params: P) -> Result<usize> {
 				params.__bind_in(self)?;
 				self.execute_with_bound_parameters()
 			}
 			/// Execute an INSERT and return the ROWID.
-			///
-			/// # Note
-			///
-			/// This function is a convenience wrapper around
-			/// [`execute()`](Statement::execute) intended for queries that insert a
-			/// single item. It is possible to misuse this function in a way that it
-			/// cannot detect, such as by calling it on a statement which _updates_
-			/// a single item rather than inserting one. Please don't do that.
-			///
-			/// # Failure
-			///
-			/// Will return `Err` if no row is inserted or many rows are inserted.
 			#[inline] pub fn insert<P: Params>(&mut self, params: P) -> Result<i64>
             {
 				let changes = self.execute(params)?;
@@ -10640,145 +9626,14 @@ pub mod sqlite3
 					_ => Err(Error::StatementChangedRows(changes)),
 				}
 			}
-			/// Execute the prepared statement, returning a handle to the resulting
-			/// rows.
-			///
-			/// Due to lifetime restrictions, the rows handle returned by `query` does
-			/// not implement the `Iterator` trait. Consider using
-			/// [`query_map`](Statement::query_map) or
-			/// [`query_and_then`](Statement::query_and_then) instead, which do.
-			///
-			/// ## Example
-			///
-			/// ### Use without parameters
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// fn get_names(conn: &Connection) -> Result<Vec<String>> {
-			///     let mut stmt = conn.prepare("SELECT name FROM people")?;
-			///     let mut rows = stmt.query([])?;
-			///
-			///     let mut names = Vec::new();
-			///     while let Some(row) = rows.next()? {
-			///         names.push(row.get(0)?);
-			///     }
-			///
-			///     Ok(names)
-			/// }
-			/// ```
-			///
-			/// ### Use with positional parameters
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// fn query(conn: &Connection, name: &str) -> Result<()> {
-			///     let mut stmt = conn.prepare("SELECT * FROM test where name = ?1")?;
-			///     let mut rows = stmt.query(rusqlite::params![name])?;
-			///     while let Some(row) = rows.next()? {
-			///         // ...
-			///     }
-			///     Ok(())
-			/// }
-			/// ```
-			///
-			/// Or, equivalently (but without the [`crate::params!`] macro).
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// fn query(conn: &Connection, name: &str) -> Result<()> {
-			///     let mut stmt = conn.prepare("SELECT * FROM test where name = ?1")?;
-			///     let mut rows = stmt.query([name])?;
-			///     while let Some(row) = rows.next()? {
-			///         // ...
-			///     }
-			///     Ok(())
-			/// }
-			/// ```
-			///
-			/// ### Use with named parameters
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// fn query(conn: &Connection) -> Result<()> {
-			///     let mut stmt = conn.prepare("SELECT * FROM test where name = :name")?;
-			///     let mut rows = stmt.query(&[(":name", "one")])?;
-			///     while let Some(row) = rows.next()? {
-			///         // ...
-			///     }
-			///     Ok(())
-			/// }
-			/// ```
-			///
-			/// Note, the `named_params!` macro is provided for syntactic convenience,
-			/// and so the above example could also be written as:
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result, named_params};
-			/// fn query(conn: &Connection) -> Result<()> {
-			///     let mut stmt = conn.prepare("SELECT * FROM test where name = :name")?;
-			///     let mut rows = stmt.query(named_params! { ":name": "one" })?;
-			///     while let Some(row) = rows.next()? {
-			///         // ...
-			///     }
-			///     Ok(())
-			/// }
-			/// ```
-			///
-			/// ## Failure
-			///
-			/// Will return `Err` if binding parameters fails.
+			/// Execute the prepared statement, returning a handle to the resulting rows.
 			#[inline] pub fn query<P: Params>(&mut self, params: P) -> Result<Rows<'_>> {
 				params.__bind_in(self)?;
 				Ok(Rows::new(self))
 			}
 			/// Executes the prepared statement and maps a function over the resulting
 			/// rows, returning an iterator over the mapped function results.
-			///
-			/// `f` is used to transform the _streaming_ iterator into a _standard_
-			/// iterator.
-			///
-			/// This is equivalent to `stmt.query(params)?.mapped(f)`.
-			///
-			/// ## Example
-			///
-			/// ### Use with positional params
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// fn get_names(conn: &Connection) -> Result<Vec<String>> {
-			///     let mut stmt = conn.prepare("SELECT name FROM people")?;
-			///     let rows = stmt.query_map([], |row| row.get(0))?;
-			///
-			///     let mut names = Vec::new();
-			///     for name_result in rows {
-			///         names.push(name_result?);
-			///     }
-			///
-			///     Ok(names)
-			/// }
-			/// ```
-			///
-			/// ### Use with named params
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// fn get_names(conn: &Connection) -> Result<Vec<String>> {
-			///     let mut stmt = conn.prepare("SELECT name FROM people WHERE id = :id")?;
-			///     let rows = stmt.query_map(&[(":id", &"one")], |row| row.get(0))?;
-			///
-			///     let mut names = Vec::new();
-			///     for name_result in rows {
-			///         names.push(name_result?);
-			///     }
-			///
-			///     Ok(names)
-			/// }
-			/// ```
-			/// ## Failure
-			///
-			/// Will return `Err` if binding parameters fails.
-			pub fn query_map<T, P, F>(&mut self, params: P, f: F) -> Result<MappedRows<'_, F>>
-			where
+			pub fn query_map<T, P, F>(&mut self, params: P, f: F) -> Result<MappedRows<'_, F>> where
 				P: Params,
 				F: FnMut(&Row<'_>) -> Result<T>,
 			{
@@ -10787,59 +9642,7 @@ pub mod sqlite3
 			/// Executes the prepared statement and maps a function over the resulting
 			/// rows, where the function returns a `Result` with `Error` type
 			/// implementing `std::convert::From<Error>` (so errors can be unified).
-			///
-			/// This is equivalent to `stmt.query(params)?.and_then(f)`.
-			///
-			/// ## Example
-			///
-			/// ### Use with named params
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// struct Person {
-			///     name: String,
-			/// };
-			///
-			/// fn name_to_person(name: String) -> Result<Person> {
-			///     // ... check for valid name
-			///     Ok(Person { name })
-			/// }
-			///
-			/// fn get_names(conn: &Connection) -> Result<Vec<Person>> {
-			///     let mut stmt = conn.prepare("SELECT name FROM people WHERE id = :id")?;
-			///     let rows = stmt.query_and_then(&[(":id", "one")], |row| name_to_person(row.get(0)?))?;
-			///
-			///     let mut persons = Vec::new();
-			///     for person_result in rows {
-			///         persons.push(person_result?);
-			///     }
-			///
-			///     Ok(persons)
-			/// }
-			/// ```
-			///
-			/// ### Use with positional params
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// fn get_names(conn: &Connection) -> Result<Vec<String>> {
-			///     let mut stmt = conn.prepare("SELECT name FROM people WHERE id = ?1")?;
-			///     let rows = stmt.query_and_then(["one"], |row| row.get::<_, String>(0))?;
-			///
-			///     let mut persons = Vec::new();
-			///     for person_result in rows {
-			///         persons.push(person_result?);
-			///     }
-			///
-			///     Ok(persons)
-			/// }
-			/// ```
-			///
-			/// # Failure
-			///
-			/// Will return `Err` if binding parameters fails.
-			#[inline] pub fn query_and_then<T, E, P, F>(&mut self, params: P, f: F) -> Result<AndThenRows<'_, F>>
-			where
+			#[inline] pub fn query_and_then<T, E, P, F>(&mut self, params: P, f: F) -> Result<AndThenRows<'_, F>> where
 				P: Params,
 				E: From<Error>,
 				F: FnMut(&Row<'_>) -> Result<T, E>,
@@ -10854,23 +9657,8 @@ pub mod sqlite3
 				let exists = rows.next()?.is_some();
 				Ok(exists)
 			}
-			/// Convenience method to execute a query that is expected to return a
-			/// single row.
-			///
-			/// If the query returns more than one row, all rows except the first are
-			/// ignored.
-			///
-			/// Returns `Err(QueryReturnedNoRows)` if no results are returned. If the
-			/// query truly is optional, you can call
-			/// [`.optional()`](crate::OptionalExtension::optional) on the result of
-			/// this to get a `Result<Option<T>>` (requires that the trait
-			/// `rusqlite::OptionalExtension` is imported).
-			///
-			/// # Failure
-			///
-			/// Will return `Err` if the underlying SQLite call fails.
-			pub fn query_row<T, P, F>(&mut self, params: P, f: F) -> Result<T>
-			where
+			/// Convenience method to execute a query that is expected to return a single row.
+			pub fn query_row<T, P, F>(&mut self, params: P, f: F) -> Result<T> where
 				P: Params,
 				F: FnOnce(&Row<'_>) -> Result<T>,
 			{
@@ -10878,22 +9666,8 @@ pub mod sqlite3
 
 				rows.get_expected_row().and_then(f)
 			}
-			/// Convenience method to execute a query that is expected to return exactly
-			/// one row.
-			///
-			/// Returns `Err(QueryReturnedMoreThanOneRow)` if the query returns more than one row.
-			///
-			/// Returns `Err(QueryReturnedNoRows)` if no results are returned. If the
-			/// query truly is optional, you can call
-			/// [`.optional()`](crate::OptionalExtension::optional) on the result of
-			/// this to get a `Result<Option<T>>` (requires that the trait
-			/// `rusqlite::OptionalExtension` is imported).
-			///
-			/// # Failure
-			///
-			/// Will return `Err` if the underlying SQLite call fails.
-			pub fn query_one<T, P, F>(&mut self, params: P, f: F) -> Result<T>
-			where
+			/// Convenience method to execute a query that is expected to return exactly one row.
+			pub fn query_one<T, P, F>(&mut self, params: P, f: F) -> Result<T> where
 				P: Params,
 				F: FnOnce(&Row<'_>) -> Result<T>,
 			{
@@ -10905,60 +9679,15 @@ pub mod sqlite3
 				Ok(row)
 			}
 			/// Consumes the statement.
-			///
-			/// Functionally equivalent to the `Drop` implementation, but allows
-			/// callers to see any errors that occur.
-			///
-			/// # Failure
-			///
-			/// Will return `Err` if the underlying SQLite call fails.
 			#[inline] pub fn finalize(mut self) -> Result<()> {
 				self.finalize_()
 			}
 			/// Return the (one-based) index of an SQL parameter given its name.
-			///
-			/// Note that the initial ":" or "$" or "@" or "?" used to specify the
-			/// parameter is included as part of the name.
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// fn example(conn: &Connection) -> Result<()> {
-			///     let stmt = conn.prepare("SELECT * FROM test WHERE name = :example")?;
-			///     let index = stmt.parameter_index(":example")?;
-			///     assert_eq!(index, Some(1));
-			///     Ok(())
-			/// }
-			/// ```
-			///
-			/// # Failure
-			///
-			/// Will return Err if `name` is invalid. Will return Ok(None) if the name
-			/// is valid but not a bound parameter of this statement.
 			#[inline] pub fn parameter_index(&self, name: &str) -> Result<Option<usize>>
             {
 				Ok(self.stmt.bind_parameter_index(name))
 			}
-			/// Return the SQL parameter name given its (one-based) index (the inverse
-			/// of [`Statement::parameter_index`]).
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// fn example(conn: &Connection) -> Result<()> {
-			///     let stmt = conn.prepare("SELECT * FROM test WHERE name = :example")?;
-			///     let index = stmt.parameter_name(1);
-			///     assert_eq!(index, Some(":example"));
-			///     Ok(())
-			/// }
-			/// ```
-			///
-			/// # Failure
-			///
-			/// Will return `None` if the column index is out of bounds or if the
-			/// parameter is positional.
-			///
-			/// # Panics
-			///
-			/// Panics when parameter name is not valid UTF-8.
+			/// Return the SQL parameter name given its (one-based) index (the inverse of [`Statement::parameter_index`]).
 			#[inline] pub fn parameter_name(&self, index: usize) -> Option<&'_ str> {
 				self.stmt.bind_parameter_name(index as i32).map(|name| {
 					name.to_str()
@@ -10966,16 +9695,14 @@ pub mod sqlite3
 				})
 			}
 
-			#[inline]
-			pub fn bind_parameters<P>(&mut self, params: P) -> Result<()>
-			where
+			#[inline] pub fn bind_parameters<P>(&mut self, params: P) -> Result<()> where
 				P: IntoIterator,
 				P::Item: ToSql,
 			{
 				let expected = self.stmt.bind_parameter_count();
 				let mut index = 0;
 				for p in params {
-					index += 1; // The leftmost SQL parameter has an index of 1.
+					index += 1;
 					if index > expected {
 						break;
 					}
@@ -10988,8 +9715,7 @@ pub mod sqlite3
 				}
 			}
 
-			#[inline]
-			pub fn ensure_parameter_count(&self, n: usize) -> Result<()>
+			#[inline] pub fn ensure_parameter_count(&self, n: usize) -> Result<()>
             {
 				let count = self.parameter_count();
 				if count != n {
@@ -10999,8 +9725,7 @@ pub mod sqlite3
 				}
 			}
 
-			#[inline]
-			pub fn bind_parameters_named<S: BindIndex, T: ToSql>(
+			#[inline] pub fn bind_parameters_named<S: BindIndex, T: ToSql>(
 				&mut self,
 				params: &[(S, T)],
 			) -> Result<()> {
@@ -11016,90 +9741,24 @@ pub mod sqlite3
 				self.stmt.bind_parameter_count()
 			}
 			/// Low level API to directly bind a parameter to a given index.
-			///
-			/// Note that the index is one-based, that is, the first parameter index is
-			/// 1 and not 0. This is consistent with the SQLite API and the values given
-			/// to parameters bound as `?NNN`.
-			///
-			/// The valid values for `one_based_col_index` begin at `1`, and end at
-			/// [`Statement::parameter_count`], inclusive.
-			///
-			/// # Caveats
-			///
-			/// This should not generally be used, but is available for special cases
-			/// such as:
-			///
-			/// - binding parameters where a gap exists.
-			/// - binding named and positional parameters in the same query.
-			/// - separating parameter binding from query execution.
-			///
-			/// In general, statements that have had *any* parameters bound this way
-			/// should have *all* parameters bound this way, and be queried or executed
-			/// by [`Statement::raw_query`] or [`Statement::raw_execute`], other usage
-			/// is unsupported and will likely, probably in surprising ways.
-			///
-			/// That is: Do not mix the "raw" statement functions with the rest of the
-			/// API, or the results may be surprising, and may even change in future
-			/// versions without comment.
-			///
-			/// # Example
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// fn query(conn: &Connection) -> Result<()> {
-			///     let mut stmt = conn.prepare("SELECT * FROM test WHERE name = :name AND value > ?2")?;
-			///     stmt.raw_bind_parameter(c":name", "foo")?;
-			///     stmt.raw_bind_parameter(2, 100)?;
-			///     let mut rows = stmt.raw_query();
-			///     while let Some(row) = rows.next()? {
-			///         // ...
-			///     }
-			///     Ok(())
-			/// }
-			/// ```
 			#[inline] pub fn raw_bind_parameter<I: BindIndex, T: ToSql>(
 				&mut self,
 				one_based_index: I,
 				param: T,
-			) -> Result<()> {
-				// This is the same as `bind_parameter` but slightly more ergonomic and
-				// correctly takes `&mut self`.
+			) -> Result<()>
+            {
 				self.bind_parameter(&param, one_based_index.idx(self)?)
 			}
-			/// Low level API to execute a statement given that all parameters were
-			/// bound explicitly with the [`Statement::raw_bind_parameter`] API.
-			///
-			/// # Caveats
-			///
-			/// Any unbound parameters will have `NULL` as their value.
-			///
-			/// This should not generally be used outside special cases, and
-			/// functions in the [`Statement::execute`] family should be preferred.
-			///
-			/// # Failure
-			///
-			/// Will return `Err` if the executed statement returns rows (in which case
-			/// `query` should be used instead), or the underlying SQLite call fails.
+			/// Low level API to execute a statement given that all parameters were bound explicitly with the [`Statement::raw_bind_parameter`] API.
 			#[inline] pub fn raw_execute(&mut self) -> Result<usize> {
 				self.execute_with_bound_parameters()
 			}
 			/// Low level API to get `Rows` for this query given that all parameters
 			/// were bound explicitly with the [`Statement::raw_bind_parameter`] API.
-			///
-			/// # Caveats
-			///
-			/// Any unbound parameters will have `NULL` as their value.
-			///
-			/// This should not generally be used outside special cases, and
-			/// functions in the [`Statement::query`] family should be preferred.
-			///
-			/// Note that if the SQL does not return results, [`Statement::raw_execute`]
-			/// should be used instead.
 			#[inline] pub fn raw_query(&mut self) -> Rows<'_> {
 				Rows::new(self)
 			}
-
-			// generic because many of these branches can constant fold away.
+            
 			fn bind_parameter<P: ?Sized + ToSql>(&self, param: &P, ndx: usize) -> Result<()>
             {
 				let value = param.to_sql()?;
@@ -11108,30 +9767,6 @@ pub mod sqlite3
 				let value = match value {
 					ToSqlOutput::Borrowed(v) => v,
 					ToSqlOutput::Owned(ref v) => ValueRef::from(v),
-
-					#[cfg(feature = "blob")]
-					ToSqlOutput::ZeroBlob(len) => {
-						// TODO sqlite3_bind_zeroblob64 // 3.8.11
-						return self
-							.conn
-							.decode_result(unsafe { sqlite3_bind_zeroblob(ptr, ndx as c_int, len) });
-					}
-					#[cfg(feature = "functions")]
-					ToSqlOutput::Arg(_) => {
-						return Err(err!(SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
-					}
-					#[cfg(feature = "array")]
-					ToSqlOutput::Array(a) => {
-						return self.conn.decode_result(unsafe {
-							sqlite3_bind_pointer(
-								ptr,
-								ndx as c_int,
-								Rc::into_raw(a) as *mut c_void,
-								ARRAY_TYPE,
-								Some(free_array),
-							)
-						});
-					}
 				};
 				self.conn.decode_result(match value {
 					ValueRef::Null => unsafe { sqlite3_bind_null(ptr, ndx as c_int) },
@@ -11139,7 +9774,7 @@ pub mod sqlite3
 					ValueRef::Real(r) => unsafe { sqlite3_bind_double(ptr, ndx as c_int, r) },
 					ValueRef::Text(s) => unsafe {
 						let (c_str, len, destructor) = str_for_sqlite(s)?;
-						// TODO sqlite3_bind_text64 // 3.8.7
+						// TODO sqlite3_bind_text64
 						sqlite3_bind_text(ptr, ndx as c_int, c_str, len, destructor)
 					},
 					ValueRef::Blob(b) => unsafe {
@@ -11147,7 +9782,7 @@ pub mod sqlite3
 						if length == 0 {
 							sqlite3_bind_zeroblob(ptr, ndx as c_int, 0)
 						} else {
-							// TODO sqlite3_bind_blob64 // 3.8.7
+							// TODO sqlite3_bind_blob64
 							sqlite3_bind_blob(
 								ptr,
 								ndx as c_int,
@@ -11180,18 +9815,7 @@ pub mod sqlite3
 				mem::swap(&mut stmt, &mut self.stmt);
 				self.conn.decode_result(stmt.finalize())
 			}
-
-			#[cfg(feature = "extra_check")]
-			#[inline] fn check_update(&self) -> Result<()> {
-				if self.column_count() > 0 && self.stmt.readonly() {
-					return Err(Error::ExecuteReturnedResults);
-				}
-				Ok(())
-			}
-
-			#[cfg(not(feature = "extra_check"))]
-			#[inline]
-			#[expect(clippy::unnecessary_wraps)]
+            
 			fn check_update(&self) -> Result<()>
             {
 				Ok(())
@@ -11216,20 +9840,15 @@ pub mod sqlite3
 			/// Returns 1 if the prepared statement is an EXPLAIN statement,
 			/// or 2 if the statement is an EXPLAIN QUERY PLAN,
 			/// or 0 if it is an ordinary statement or a NULL pointer.
-			#[inline]
-			#[cfg(feature = "modern_sqlite")] // 3.28.0
-			pub fn is_explain(&self) -> i32 {
+			#[inline] pub fn is_explain(&self) -> i32 {
 				self.stmt.is_explain()
 			}
 			/// Returns true if the statement is read only.
 			#[inline] pub fn readonly(&self) -> bool {
 				self.stmt.readonly()
 			}
-			/// Safety: This is unsafe, because using `sqlite3_stmt` after the
-			/// connection has closed is illegal, but `RawStatement` does not enforce
-			/// this, as it loses our protective `'conn` lifetime bound.
-			#[inline]
-			pub unsafe fn into_raw(mut self) -> RawStatement {
+            
+			#[inline] pub unsafe fn into_raw(mut self) -> RawStatement {
 				let mut stmt = RawStatement::new(ptr::null_mut());
 				mem::swap(&mut stmt, &mut self.stmt);
 				stmt
@@ -11244,7 +9863,8 @@ pub mod sqlite3
 			}
 		}
 
-		impl fmt::Debug for Statement<'_> {
+		impl fmt::Debug for Statement<'_>
+        {
 			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 				let sql = if self.stmt.is_null() {
 					Ok("")
@@ -11265,13 +9885,13 @@ pub mod sqlite3
 			}
 		}
 
-		impl Statement<'_> {
-			#[inline]
-			pub(super) fn new(conn: &Connection, stmt: RawStatement) -> Statement<'_> {
+		impl Statement<'_>
+        {
+			#[inline] pub fn new(conn: &Connection, stmt: RawStatement) -> Statement<'_> {
 				Statement { conn, stmt }
 			}
 
-			pub(super) fn value_ref(&self, col: usize) -> ValueRef<'_>
+			pub fn value_ref(&self, col: usize) -> ValueRef<'_>
             {
 				let raw = unsafe { self.stmt.ptr() };
 
@@ -11285,10 +9905,6 @@ pub mod sqlite3
 					}
 					SQLITE_TEXT => {
 						let s = unsafe {
-							// Quoting from "Using SQLite" book:
-							// To avoid problems, an application should first extract the desired type using
-							// a sqlite3_column_xxx() function, and then call the
-							// appropriate sqlite3_column_bytes() function.
 							let text = sqlite3_column_text(raw, col as c_int);
 							let len = sqlite3_column_bytes(raw, col as c_int);
 							assert!(
@@ -11328,8 +9944,7 @@ pub mod sqlite3
 				}
 			}
 
-			#[inline]
-			pub(super) fn step(&self) -> Result<bool> {
+			#[inline] pub fn step(&self) -> Result<bool> {
 				match self.stmt.step() {
 					SQLITE_ROW => Ok(true),
 					SQLITE_DONE => Ok(false),
@@ -11337,8 +9952,7 @@ pub mod sqlite3
 				}
 			}
 
-			#[inline]
-			pub(super) fn reset(&self) -> Result<()> {
+			#[inline] pub fn reset(&self) -> Result<()> {
 				match self.stmt.reset() {
 					SQLITE_OK => Ok(()),
 					code => Err(self.conn.decode_result(code).unwrap_err()),
@@ -11346,12 +9960,6 @@ pub mod sqlite3
 			}
 		}
 		/// Prepared statement status counters.
-		///
-		/// See `https://www.sqlite.org/c3ref/c_stmtstatus_counter.html`
-		/// for explanations of each.
-		///
-		/// Note that depending on your version of SQLite, all of these
-		/// may not be available.
 		#[repr(i32)]
 		#[derive(Clone, Copy, PartialEq, Eq)]
 		#[non_exhaustive]
@@ -11409,14 +10017,11 @@ pub mod sqlite3
         {
 			/// Roll back the changes. This is the default.
 			Rollback,
-
 			/// Commit the changes.
 			Commit,
-
 			/// Do not commit or roll back changes - this will leave the transaction or
 			/// savepoint open, so should be used with care.
 			Ignore,
-
 			/// Panic. Used to enforce intentional behavior during development.
 			Panic,
 		}
@@ -11438,18 +10043,10 @@ pub mod sqlite3
 		impl Transaction<'_> {
 			/// Begin a new transaction. Cannot be nested; see `savepoint` for nested
 			/// transactions.
-			///
-			/// Even though we don't mutate the connection, we take a `&mut Connection`
-			/// to prevent nested transactions on the same connection. For cases
-			/// where this is unacceptable, [`Transaction::new_unchecked`] is available.
 			#[inline] pub fn new(conn: &mut Connection, behavior: TransactionBehavior) -> Result<Transaction<'_>> {
 				Self::new_unchecked(conn, behavior)
 			}
 			/// Begin a new transaction, failing if a transaction is open.
-			///
-			/// If a transaction is already open, this will return an error. Where
-			/// possible, [`Transaction::new`] should be preferred, as it provides a
-			/// compile-time guarantee that transactions are not nested.
 			#[inline] pub fn new_unchecked(
 				conn: &Connection,
 				behavior: TransactionBehavior,
@@ -11467,31 +10064,6 @@ pub mod sqlite3
 			}
 			/// Starts a new [savepoint](http://www.sqlite.org/lang_savepoint.html), allowing nested
 			/// transactions.
-			///
-			/// ## Note
-			///
-			/// Just like outer level transactions, savepoint transactions rollback by
-			/// default.
-			///
-			/// ## Example
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// # fn perform_queries_part_1_succeeds(_conn: &Connection) -> bool { true }
-			/// fn perform_queries(conn: &mut Connection) -> Result<()> {
-			///     let mut tx = conn.transaction()?;
-			///
-			///     {
-			///         let sp = tx.savepoint()?;
-			///         if perform_queries_part_1_succeeds(&sp) {
-			///             sp.commit()?;
-			///         }
-			///         // otherwise, sp will rollback
-			///     }
-			///
-			///     tx.commit()
-			/// }
-			/// ```
 			#[inline] pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
 				Savepoint::new_(self.conn)
 			}
@@ -11501,9 +10073,7 @@ pub mod sqlite3
 			}
 			/// Get the current setting for what happens to the transaction when it is
 			/// dropped.
-			#[inline]
-			#[must_use]
-			pub fn drop_behavior(&self) -> DropBehavior {
+			#[inline] #[must_use] pub fn drop_behavior(&self) -> DropBehavior {
 				self.drop_behavior
 			}
 			/// Configure the transaction to perform the specified action when it is
@@ -11531,14 +10101,12 @@ pub mod sqlite3
 			}
 			/// Consumes the transaction, committing or rolling back according to the
 			/// current setting (see `drop_behavior`).
-			///
-			/// Functionally equivalent to the `Drop` implementation, but allows
-			/// callers to see any errors that occur.
 			#[inline] pub fn finish(mut self) -> Result<()> {
 				self.finish_()
 			}
 
-			#[inline] fn finish_(&mut self) -> Result<()> {
+			#[inline] fn finish_(&mut self) -> Result<()>
+            {
 				if self.conn.is_autocommit() {
 					return Ok(());
 				}
@@ -11559,13 +10127,15 @@ pub mod sqlite3
 			}
 		}
 
-		impl Drop for Transaction<'_> {
+		impl Drop for Transaction<'_>
+        {
 			#[inline] fn drop(&mut self) {
 				self.finish_();
 			}
 		}
 
-		impl Savepoint<'_> {
+		impl Savepoint<'_>
+        {
 			#[inline] fn with_name_<T: Into<String>>(conn: &Connection, name: T) -> Result<Savepoint<'_>>
             {
 				let name = name.into();
@@ -11599,9 +10169,7 @@ pub mod sqlite3
 			}
 			/// Get the current setting for what happens to the savepoint when it is
 			/// dropped.
-			#[inline]
-			#[must_use]
-			pub fn drop_behavior(&self) -> DropBehavior {
+			#[inline] #[must_use] pub fn drop_behavior(&self) -> DropBehavior {
 				self.drop_behavior
 			}
 			/// Configure the savepoint to perform the specified action when it is
@@ -11620,25 +10188,18 @@ pub mod sqlite3
 				Ok(())
 			}
 			/// A convenience method which rolls back a savepoint.
-			///
-			/// ## Note
-			///
-			/// Unlike `Transaction`s, savepoints remain active after they have been
-			/// rolled back, and can be rolled back again or committed.
 			#[inline] pub fn rollback(&mut self) -> Result<()> {
 				self.conn
 					.execute_batch(&format!("ROLLBACK TO {}", self.name))
 			}
 			/// Consumes the savepoint, committing or rolling back according to the
 			/// current setting (see `drop_behavior`).
-			///
-			/// Functionally equivalent to the `Drop` implementation, but allows
-			/// callers to see any errors that occur.
 			#[inline] pub fn finish(mut self) -> Result<()> {
 				self.finish_()
 			}
 
-			#[inline] fn finish_(&mut self) -> Result<()> {
+			#[inline] fn finish_(&mut self) -> Result<()>
+            {
 				if self.committed {
 					return Ok(());
 				}
@@ -11662,6 +10223,7 @@ pub mod sqlite3
 		}
         
 		impl Drop for Savepoint<'_>
+       
         {
 			#[inline] fn drop(&mut self) {
 				self.finish_();
@@ -11682,41 +10244,10 @@ pub mod sqlite3
 		impl Connection
         {
 			/// Begin a new transaction with the default behavior (DEFERRED).
-			///
-			/// The transaction defaults to rolling back when it is dropped. If you
-			/// want the transaction to commit, you must call
-			/// [`commit`](Transaction::commit) or
-			/// [`set_drop_behavior(DropBehavior::Commit)`](Transaction::set_drop_behavior).
-			///
-			/// ## Example
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// # fn do_queries_part_1(_conn: &Connection) -> Result<()> { Ok(()) }
-			/// # fn do_queries_part_2(_conn: &Connection) -> Result<()> { Ok(()) }
-			/// fn perform_queries(conn: &mut Connection) -> Result<()> {
-			///     let tx = conn.transaction()?;
-			///
-			///     do_queries_part_1(&tx)?; // tx causes rollback if this fails
-			///     do_queries_part_2(&tx)?; // tx causes rollback if this fails
-			///
-			///     tx.commit()
-			/// }
-			/// ```
-			///
-			/// # Failure
-			///
-			/// Will return `Err` if the underlying SQLite call fails.
 			#[inline] pub fn transaction(&mut self) -> Result<Transaction<'_>> {
 				Transaction::new(self, self.transaction_behavior)
 			}
 			/// Begin a new transaction with a specified behavior.
-			///
-			/// See [`transaction`](Connection::transaction).
-			///
-			/// # Failure
-			///
-			/// Will return `Err` if the underlying SQLite call fails.
 			#[inline] pub fn transaction_with_behavior(
 				&mut self,
 				behavior: TransactionBehavior,
@@ -11724,79 +10255,18 @@ pub mod sqlite3
 				Transaction::new(self, behavior)
 			}
 			/// Begin a new transaction with the default behavior (DEFERRED).
-			///
-			/// Attempt to open a nested transaction will result in a SQLite error.
-			/// `Connection::transaction` prevents this at compile time by taking `&mut
-			/// self`, but `Connection::unchecked_transaction()` may be used to defer
-			/// the checking until runtime.
-			///
-			/// See [`Connection::transaction`] and [`Transaction::new_unchecked`]
-			/// (which can be used if the default transaction behavior is undesirable).
-			///
-			/// ## Example
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// # use std::rc::Rc;
-			/// # fn do_queries_part_1(_conn: &Connection) -> Result<()> { Ok(()) }
-			/// # fn do_queries_part_2(_conn: &Connection) -> Result<()> { Ok(()) }
-			/// fn perform_queries(conn: Rc<Connection>) -> Result<()> {
-			///     let tx = conn.unchecked_transaction()?;
-			///
-			///     do_queries_part_1(&tx)?; // tx causes rollback if this fails
-			///     do_queries_part_2(&tx)?; // tx causes rollback if this fails
-			///
-			///     tx.commit()
-			/// }
-			/// ```
-			///
-			/// # Failure
-			///
-			/// Will return `Err` if the underlying SQLite call fails. The specific
-			/// error returned if transactions are nested is currently unspecified.
 			pub fn unchecked_transaction(&self) -> Result<Transaction<'_>> {
 				Transaction::new_unchecked(self, self.transaction_behavior)
 			}
 			/// Begin a new savepoint with the default behavior (DEFERRED).
-			///
-			/// The savepoint defaults to rolling back when it is dropped. If you want
-			/// the savepoint to commit, you must call [`commit`](Savepoint::commit) or
-			/// [`set_drop_behavior(DropBehavior::Commit)`](Savepoint::set_drop_behavior).
-			///
-			/// ## Example
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result};
-			/// # fn do_queries_part_1(_conn: &Connection) -> Result<()> { Ok(()) }
-			/// # fn do_queries_part_2(_conn: &Connection) -> Result<()> { Ok(()) }
-			/// fn perform_queries(conn: &mut Connection) -> Result<()> {
-			///     let sp = conn.savepoint()?;
-			///
-			///     do_queries_part_1(&sp)?; // sp causes rollback if this fails
-			///     do_queries_part_2(&sp)?; // sp causes rollback if this fails
-			///
-			///     sp.commit()
-			/// }
-			/// ```
-			///
-			/// # Failure
-			///
-			/// Will return `Err` if the underlying SQLite call fails.
 			#[inline] pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
 				Savepoint::new(self)
 			}
 			/// Begin a new savepoint with a specified name.
-			///
-			/// See [`savepoint`](Connection::savepoint).
-			///
-			/// # Failure
-			///
-			/// Will return `Err` if the underlying SQLite call fails.
 			#[inline] pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
 				Savepoint::with_name(self, name)
 			}
 			/// Determine the transaction state of a database
-			#[cfg(feature = "modern_sqlite")] // 3.37.0
 			pub fn transaction_state<N: crate::Name>(
 				&self,
 				db_name: Option<N>,
@@ -11804,29 +10274,6 @@ pub mod sqlite3
 				self.db.borrow().txn_state(db_name)
 			}
 			/// Set the default transaction behavior for the connection.
-			///
-			/// ## Note
-			///
-			/// This will only apply to transactions initiated by [`transaction`](Connection::transaction)
-			/// or [`unchecked_transaction`](Connection::unchecked_transaction).
-			///
-			/// ## Example
-			///
-			/// ```rust,no_run
-			/// # use rusqlite::{Connection, Result, TransactionBehavior};
-			/// # fn do_queries_part_1(_conn: &Connection) -> Result<()> { Ok(()) }
-			/// # fn do_queries_part_2(_conn: &Connection) -> Result<()> { Ok(()) }
-			/// fn perform_queries(conn: &mut Connection) -> Result<()> {
-			///     conn.set_transaction_behavior(TransactionBehavior::Immediate);
-			///
-			///     let tx = conn.transaction()?;
-			///
-			///     do_queries_part_1(&tx)?; // tx causes rollback if this fails
-			///     do_queries_part_2(&tx)?; // tx causes rollback if this fails
-			///
-			///     tx.commit()
-			/// }
-			/// ```
 			pub fn set_transaction_behavior(&mut self, behavior: TransactionBehavior) {
 				self.transaction_behavior = behavior;
 			}
@@ -11937,7 +10384,8 @@ pub mod sqlite3
 			}
 
 			impl Error for FromSqlError {
-				fn source(&self) -> Option<&(dyn Error + 'static)> {
+				fn source(&self) -> Option<&(dyn Error + 'static)>
+                {
 					if let Self::Other(ref err) = self {
 						Some(&**err)
 					} else {
@@ -11978,7 +10426,7 @@ pub mod sqlite3
 			from_sql_integral!(i8);
 			from_sql_integral!(i16);
 			from_sql_integral!(i32);
-			// from_sql_integral!(i64); // Not needed because the native type is i64.
+			// from_sql_integral!(i64);
 			from_sql_integral!(isize);
 			from_sql_integral!(u8);
 			from_sql_integral!(u16);
@@ -12002,15 +10450,13 @@ pub mod sqlite3
 			// std::num::NonZeroU128 is not supported since u128 isn't either
 
 			impl FromSql for i64 {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					value.as_i64()
 				}
 			}
 
 			impl FromSql for f32 {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					match value {
 						ValueRef::Integer(i) => Ok(i as Self),
 						ValueRef::Real(f) => Ok(f as Self),
@@ -12020,8 +10466,7 @@ pub mod sqlite3
 			}
 
 			impl FromSql for f64 {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					match value {
 						ValueRef::Integer(i) => Ok(i as Self),
 						ValueRef::Real(f) => Ok(f),
@@ -12031,71 +10476,61 @@ pub mod sqlite3
 			}
 
 			impl FromSql for bool {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					i64::column_result(value).map(|i| i != 0)
 				}
 			}
 
 			impl FromSql for String {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					value.as_str().map(ToString::to_string)
 				}
 			}
 
 			impl FromSql for Box<str> {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					value.as_str().map(Into::into)
 				}
 			}
 
 			impl FromSql for std::rc::Rc<str> {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					value.as_str().map(Into::into)
 				}
 			}
 
 			impl FromSql for std::sync::Arc<str> {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					value.as_str().map(Into::into)
 				}
 			}
 
 			impl FromSql for Vec<u8> {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					value.as_blob().map(<[u8]>::to_vec)
 				}
 			}
 
 			impl FromSql for Box<[u8]> {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					value.as_blob().map(Box::<[u8]>::from)
 				}
 			}
 
 			impl FromSql for std::rc::Rc<[u8]> {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					value.as_blob().map(std::rc::Rc::<[u8]>::from)
 				}
 			}
 
 			impl FromSql for std::sync::Arc<[u8]> {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					value.as_blob().map(std::sync::Arc::<[u8]>::from)
 				}
 			}
 
 			impl<const N: usize> FromSql for [u8; N] {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					let slice = value.as_blob()?;
 					slice.try_into().map_err(|_| FromSqlError::InvalidBlobSize {
 						expected_size: N,
@@ -12106,8 +10541,7 @@ pub mod sqlite3
 
 			#[cfg(feature = "i128_blob")]
 			impl FromSql for i128 {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					let bytes = <[u8; 16]>::column_result(value)?;
 					Ok(Self::from_be_bytes(bytes) ^ (1_i128 << 127))
 				}
@@ -12115,16 +10549,14 @@ pub mod sqlite3
 
 			#[cfg(feature = "uuid")]
 			impl FromSql for uuid::Uuid {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					let bytes = <[u8; 16]>::column_result(value)?;
 					Ok(Self::from_u128(u128::from_be_bytes(bytes)))
 				}
 			}
 
 			impl<T: FromSql> FromSql for Option<T> {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					match value {
 						ValueRef::Null => Ok(None),
 						_ => FromSql::column_result(value).map(Some),
@@ -12132,20 +10564,17 @@ pub mod sqlite3
 				}
 			}
 
-			impl<T: ?Sized> FromSql for Cow<'_, T>
-			where
+			impl<T: ?Sized> FromSql for Cow<'_, T> where
 				T: ToOwned,
 				T::Owned: FromSql,
 			{
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					<T::Owned>::column_result(value).map(Cow::Owned)
 				}
 			}
 
 			impl FromSql for Value {
-				#[inline]
-				fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					Ok(value.into())
 				}
 			}
@@ -12194,12 +10623,10 @@ pub mod sqlite3
 
 			// Generically allow any type that can be converted into a ValueRef
 			// to be converted into a ToSqlOutput as well.
-			impl<'a, T: ?Sized> From<&'a T> for ToSqlOutput<'a>
-			where
+			impl<'a, T: ?Sized> From<&'a T> for ToSqlOutput<'a> where
 				&'a T: Into<ValueRef<'a>>,
 			{
-				#[inline]
-				fn from(t: &'a T) -> Self {
+				#[inline] fn from(t: &'a T) -> Self {
 					ToSqlOutput::Borrowed(t.into())
 				}
 			}
@@ -12260,8 +10687,7 @@ pub mod sqlite3
 			from_value!(uuid::Uuid);
 
 			impl ToSql for ToSqlOutput<'_> {
-				#[inline]
-				fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+				#[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
 					Ok(match *self {
 						ToSqlOutput::Borrowed(v) => ToSqlOutput::Borrowed(v),
 						ToSqlOutput::Owned(ref v) => ToSqlOutput::Borrowed(ValueRef::from(v)),
@@ -12283,29 +10709,29 @@ pub mod sqlite3
 			}
 
 			impl<T: ToSql + ToOwned + ?Sized> ToSql for Cow<'_, T> {
-				#[inline]
-				fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+				#[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>>
+                {
 					self.as_ref().to_sql()
 				}
 			}
 
 			impl<T: ToSql + ?Sized> ToSql for Box<T> {
-				#[inline]
-				fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+				#[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>>
+                {
 					self.as_ref().to_sql()
 				}
 			}
 
 			impl<T: ToSql + ?Sized> ToSql for std::rc::Rc<T> {
-				#[inline]
-				fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+				#[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>>
+                {
 					self.as_ref().to_sql()
 				}
 			}
 
 			impl<T: ToSql + ?Sized> ToSql for std::sync::Arc<T> {
-				#[inline]
-				fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+				#[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>>
+                {
 					self.as_ref().to_sql()
 				}
 			}
@@ -12403,57 +10829,49 @@ pub mod sqlite3
 			where
 				T: ToSql,
 			{
-				#[inline]
-				fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+				#[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
 					(*self).to_sql()
 				}
 			}
 
 			impl ToSql for String {
-				#[inline]
-				fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+				#[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
 					Ok(ToSqlOutput::from(self.as_str()))
 				}
 			}
 
 			impl ToSql for str {
-				#[inline]
-				fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+				#[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
 					Ok(ToSqlOutput::from(self))
 				}
 			}
 
 			impl ToSql for Vec<u8> {
-				#[inline]
-				fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+				#[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
 					Ok(ToSqlOutput::from(self.as_slice()))
 				}
 			}
 
 			impl<const N: usize> ToSql for [u8; N] {
-				#[inline]
-				fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+				#[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
 					Ok(ToSqlOutput::from(&self[..]))
 				}
 			}
 
 			impl ToSql for [u8] {
-				#[inline]
-				fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+				#[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
 					Ok(ToSqlOutput::from(self))
 				}
 			}
 
 			impl ToSql for Value {
-				#[inline]
-				fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+				#[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
 					Ok(ToSqlOutput::from(self))
 				}
 			}
 
 			impl<T: ToSql> ToSql for Option<T> {
-				#[inline]
-				fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+				#[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
 					match *self {
 						None => Ok(ToSqlOutput::from(Null)),
 						Some(ref t) => t.to_sql(),
@@ -12474,11 +10892,7 @@ pub mod sqlite3
 			/*
 			use super::{Null, Type};
 			*/
-			/// Owning [dynamic type value](http://sqlite.org/datatype3.html). Value's type is typically
-			/// dictated by SQLite (not by the caller).
-			///
-			/// See [`ValueRef`](crate::types::ValueRef) for a non-owning dynamic type
-			/// value.
+			/// Owning [dynamic type value](http://sqlite.org/datatype3.html).
 			#[derive(Clone, Debug, PartialEq)]
 			pub enum Value {
 				/// The value is a `NULL` value.
@@ -12494,30 +10908,26 @@ pub mod sqlite3
 			}
 
 			impl From<Null> for Value {
-				#[inline]
-				fn from(_: Null) -> Self {
+				#[inline] fn from(_: Null) -> Self {
 					Self::Null
 				}
 			}
 
 			impl From<bool> for Value {
-				#[inline]
-				fn from(i: bool) -> Self {
+				#[inline] fn from(i: bool) -> Self {
 					Self::Integer(i as i64)
 				}
 			}
 
 			impl From<isize> for Value {
-				#[inline]
-				fn from(i: isize) -> Self {
+				#[inline] fn from(i: isize) -> Self {
 					Self::Integer(i as i64)
 				}
 			}
 
 			#[cfg(feature = "i128_blob")]
 			impl From<i128> for Value {
-				#[inline]
-				fn from(i: i128) -> Self {
+				#[inline] fn from(i: i128) -> Self {
 					// We store these biased (e.g. with the most significant bit flipped)
 					// so that comparisons with negative numbers work properly.
 					Self::Blob(i128::to_be_bytes(i ^ (1_i128 << 127)).to_vec())
@@ -12526,8 +10936,7 @@ pub mod sqlite3
 
 			#[cfg(feature = "uuid")]
 			impl From<uuid::Uuid> for Value {
-				#[inline]
-				fn from(id: uuid::Uuid) -> Self {
+				#[inline] fn from(id: uuid::Uuid) -> Self {
 					Self::Blob(id.as_bytes().to_vec())
 				}
 			}
@@ -12551,36 +10960,31 @@ pub mod sqlite3
 			from_i64!(u32);
 
 			impl From<i64> for Value {
-				#[inline]
-				fn from(i: i64) -> Self {
+				#[inline] fn from(i: i64) -> Self {
 					Self::Integer(i)
 				}
 			}
 
 			impl From<f32> for Value {
-				#[inline]
-				fn from(f: f32) -> Self {
+				#[inline] fn from(f: f32) -> Self {
 					Self::Real(f.into())
 				}
 			}
 
 			impl From<f64> for Value {
-				#[inline]
-				fn from(f: f64) -> Self {
+				#[inline] fn from(f: f64) -> Self {
 					Self::Real(f)
 				}
 			}
 
 			impl From<String> for Value {
-				#[inline]
-				fn from(s: String) -> Self {
+				#[inline] fn from(s: String) -> Self {
 					Self::Text(s)
 				}
 			}
 
 			impl From<Vec<u8>> for Value {
-				#[inline]
-				fn from(v: Vec<u8>) -> Self {
+				#[inline] fn from(v: Vec<u8>) -> Self {
 					Self::Blob(v)
 				}
 			}
@@ -12589,8 +10993,7 @@ pub mod sqlite3
 			where
 				T: Into<Self>,
 			{
-				#[inline]
-				fn from(v: Option<T>) -> Self {
+				#[inline] fn from(v: Option<T>) -> Self {
 					match v {
 						Some(x) => x.into(),
 						None => Self::Null,
@@ -12627,10 +11030,7 @@ pub mod sqlite3
 			use super::{Type, Value};
 			use crate::types::{FromSqlError, FromSqlResult};
 			*/
-			/// A non-owning [dynamic type value](http://sqlite.org/datatype3.html). Typically, the
-			/// memory backing this value is owned by SQLite.
-			///
-			/// See [`Value`](Value) for an owning dynamic type value.
+			/// A non-owning [dynamic type value](http://sqlite.org/datatype3.html).
 			#[derive(Copy, Clone, Debug, PartialEq)]
 			pub enum ValueRef<'a> {
 				/// The value is a `NULL` value.
@@ -12663,8 +11063,7 @@ pub mod sqlite3
 			impl<'a> ValueRef<'a> {
 				/// If `self` is case `Integer`, returns the integral value. Otherwise,
 				/// returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
-				#[inline]
-				pub fn as_i64(&self) -> FromSqlResult<i64> {
+				#[inline] pub fn as_i64(&self) -> FromSqlResult<i64> {
 					match *self {
 						ValueRef::Integer(i) => Ok(i),
 						_ => Err(FromSqlError::InvalidType),
@@ -12674,8 +11073,7 @@ pub mod sqlite3
 				/// If `self` is case `Null` returns None.
 				/// If `self` is case `Integer`, returns the integral value.
 				/// Otherwise, returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
-				#[inline]
-				pub fn as_i64_or_null(&self) -> FromSqlResult<Option<i64>> {
+				#[inline] pub fn as_i64_or_null(&self) -> FromSqlResult<Option<i64>> {
 					match *self {
 						ValueRef::Null => Ok(None),
 						ValueRef::Integer(i) => Ok(Some(i)),
@@ -12685,8 +11083,7 @@ pub mod sqlite3
 
 				/// If `self` is case `Real`, returns the floating point value. Otherwise,
 				/// returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
-				#[inline]
-				pub fn as_f64(&self) -> FromSqlResult<f64> {
+				#[inline] pub fn as_f64(&self) -> FromSqlResult<f64> {
 					match *self {
 						ValueRef::Real(f) => Ok(f),
 						_ => Err(FromSqlError::InvalidType),
@@ -12696,8 +11093,7 @@ pub mod sqlite3
 				/// If `self` is case `Null` returns None.
 				/// If `self` is case `Real`, returns the floating point value.
 				/// Otherwise, returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
-				#[inline]
-				pub fn as_f64_or_null(&self) -> FromSqlResult<Option<f64>> {
+				#[inline] pub fn as_f64_or_null(&self) -> FromSqlResult<Option<f64>> {
 					match *self {
 						ValueRef::Null => Ok(None),
 						ValueRef::Real(f) => Ok(Some(f)),
@@ -12707,8 +11103,7 @@ pub mod sqlite3
 
 				/// If `self` is case `Text`, returns the string value. Otherwise, returns
 				/// [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
-				#[inline]
-				pub fn as_str(&self) -> FromSqlResult<&'a str> {
+				#[inline] pub fn as_str(&self) -> FromSqlResult<&'a str> {
 					match *self {
 						ValueRef::Text(t) => std::str::from_utf8(t).map_err(FromSqlError::other),
 						_ => Err(FromSqlError::InvalidType),
@@ -12718,8 +11113,7 @@ pub mod sqlite3
 				/// If `self` is case `Null` returns None.
 				/// If `self` is case `Text`, returns the string value.
 				/// Otherwise, returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
-				#[inline]
-				pub fn as_str_or_null(&self) -> FromSqlResult<Option<&'a str>> {
+				#[inline] pub fn as_str_or_null(&self) -> FromSqlResult<Option<&'a str>> {
 					match *self {
 						ValueRef::Null => Ok(None),
 						ValueRef::Text(t) => std::str::from_utf8(t)
@@ -12731,8 +11125,7 @@ pub mod sqlite3
 
 				/// If `self` is case `Blob`, returns the byte slice. Otherwise, returns
 				/// [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
-				#[inline]
-				pub fn as_blob(&self) -> FromSqlResult<&'a [u8]> {
+				#[inline] pub fn as_blob(&self) -> FromSqlResult<&'a [u8]> {
 					match *self {
 						ValueRef::Blob(b) => Ok(b),
 						_ => Err(FromSqlError::InvalidType),
@@ -12742,8 +11135,7 @@ pub mod sqlite3
 				/// If `self` is case `Null` returns None.
 				/// If `self` is case `Blob`, returns the byte slice.
 				/// Otherwise, returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
-				#[inline]
-				pub fn as_blob_or_null(&self) -> FromSqlResult<Option<&'a [u8]>> {
+				#[inline] pub fn as_blob_or_null(&self) -> FromSqlResult<Option<&'a [u8]>> {
 					match *self {
 						ValueRef::Null => Ok(None),
 						ValueRef::Blob(b) => Ok(Some(b)),
@@ -12753,8 +11145,7 @@ pub mod sqlite3
 
 				/// Returns the byte slice that makes up this `ValueRef` if it's either
 				/// [`ValueRef::Blob`] or [`ValueRef::Text`].
-				#[inline]
-				pub fn as_bytes(&self) -> FromSqlResult<&'a [u8]> {
+				#[inline] pub fn as_bytes(&self) -> FromSqlResult<&'a [u8]> {
 					match self {
 						ValueRef::Text(s) | ValueRef::Blob(s) => Ok(s),
 						_ => Err(FromSqlError::InvalidType),
@@ -12764,8 +11155,7 @@ pub mod sqlite3
 				/// If `self` is case `Null` returns None.
 				/// If `self` is [`ValueRef::Blob`] or [`ValueRef::Text`] returns the byte
 				/// slice that makes up this value
-				#[inline]
-				pub fn as_bytes_or_null(&self) -> FromSqlResult<Option<&'a [u8]>> {
+				#[inline] pub fn as_bytes_or_null(&self) -> FromSqlResult<Option<&'a [u8]>> {
 					match *self {
 						ValueRef::Null => Ok(None),
 						ValueRef::Text(s) | ValueRef::Blob(s) => Ok(Some(s)),
@@ -12792,22 +11182,19 @@ pub mod sqlite3
 			}
 
 			impl<'a> From<&'a str> for ValueRef<'a> {
-				#[inline]
-				fn from(s: &str) -> ValueRef<'_> {
+				#[inline] fn from(s: &str) -> ValueRef<'_> {
 					ValueRef::Text(s.as_bytes())
 				}
 			}
 
 			impl<'a> From<&'a [u8]> for ValueRef<'a> {
-				#[inline]
-				fn from(s: &[u8]) -> ValueRef<'_> {
+				#[inline] fn from(s: &[u8]) -> ValueRef<'_> {
 					ValueRef::Blob(s)
 				}
 			}
 
 			impl<'a> From<&'a Value> for ValueRef<'a> {
-				#[inline]
-				fn from(value: &'a Value) -> Self {
+				#[inline] fn from(value: &'a Value) -> Self {
 					match *value {
 						Value::Null => ValueRef::Null,
 						Value::Integer(i) => ValueRef::Integer(i),
@@ -12818,12 +11205,10 @@ pub mod sqlite3
 				}
 			}
 
-			impl<T> From<Option<T>> for ValueRef<'_>
-			where
+			impl<T> From<Option<T>> for ValueRef<'_> where
 				T: Into<Self>,
 			{
-				#[inline]
-				fn from(s: Option<T>) -> Self {
+				#[inline] fn from(s: Option<T>) -> Self {
 					match s {
 						Some(x) => x.into(),
 						None => ValueRef::Null,
@@ -12882,8 +11267,8 @@ pub mod sqlite3
 					}
 				}
 
-				// TODO sqlite3_value_nochange // 3.22.0 & VTab xUpdate
-				// TODO sqlite3_value_frombind // 3.28.0
+				// TODO sqlite3_value_nochange
+				// TODO sqlite3_value_frombind
 			}
 
 		}  pub use self::value::{ Value };
@@ -12927,34 +11312,21 @@ pub mod sqlite3
         */
         use ::
         {
+            ffi::{ CStr },
+            sqlite3::{ * },
             *,
         };
         /*
 		use crate::ffi;
 		use std::ffi::CStr;
         */
-        /// Returns the SQLite version as an integer; e.g., `3016002` for version
-		/// 3.16.2.
-		///
-		/// See [`sqlite3_libversion_number()`](https://www.sqlite.org/c3ref/libversion.html).
-		#[inline]
-		#[must_use]
-		pub fn version_number() -> i32 {
-			unsafe { sqlite3_libversion_number() }
-		}
+        /// Returns the SQLite version as an integer; e.g., `3016002` for version 3.16.2.
+		#[inline] #[must_use] pub fn version_number() -> i32 { unsafe { sqlite3_libversion_number() } }
 		/// Returns the SQLite version as a string; e.g., `"3.16.2"` for version 3.16.2.
-		///
-		/// See [`sqlite3_libversion()`](https://www.sqlite.org/c3ref/libversion.html).
-		///
-		/// # Panics
-		///
-		/// Panics when version is not valid UTF-8.
-		#[inline]
-		#[must_use]
-		pub fn version() -> &'static str {
+		#[inline] #[must_use] pub fn version() -> &'static str
+        {
 			let cstr = unsafe { CStr::from_ptr(sqlite3_libversion()) };
-			cstr.to_str()
-				.expect("SQLite version string is not valid UTF8 ?!")
+			cstr.to_str().expect("SQLite version string is not valid UTF8 ?!")
 		}
     } pub use self::version::*;
 
@@ -13030,8 +11402,8 @@ pub mod sqlite3
 
 			impl SmallCString 
             {
-				#[inline]
-				pub fn new(s: &str) -> Result<Self, NulError> {
+				#[inline] pub fn new(s: &str) -> Result<Self, NulError>
+                {
 					if s.as_bytes().contains(&0_u8) {
 						return Err(Self::fabricate_nul_error(s));
 					}
@@ -13043,8 +11415,7 @@ pub mod sqlite3
 					Ok(res)
 				}
 
-				#[inline]
-				pub fn as_str(&self) -> &str {
+				#[inline] pub fn as_str(&self) -> &str {
 					self.debug_checks();
 					// Constructor takes a &str so this is safe.
 					unsafe { std::str::from_utf8_unchecked(self.as_bytes_without_nul()) }
@@ -13054,16 +11425,14 @@ pub mod sqlite3
 				/// make up our `str`:
 				/// - `SmallCString::new("foo").as_bytes_without_nul() == b"foo"`
 				/// - `SmallCString::new("foo").as_bytes_with_nul() == b"foo\0"`
-				#[inline]
-				pub fn as_bytes_without_nul(&self) -> &[u8] {
+				#[inline] pub fn as_bytes_without_nul(&self) -> &[u8] {
 					self.debug_checks();
 					&self.0[..self.len()]
 				}
 
 				/// Get the bytes behind this str *including* the NUL terminator. This
 				/// should never return an empty slice.
-				#[inline]
-				pub fn as_bytes_with_nul(&self) -> &[u8] {
+				#[inline] pub fn as_bytes_with_nul(&self) -> &[u8] {
 					self.debug_checks();
 					&self.0
 				}
@@ -13082,20 +11451,18 @@ pub mod sqlite3
 				#[cfg(not(debug_assertions))]
 				fn debug_checks(&self) {}
 
-				#[inline]
-				pub fn len(&self) -> usize {
+				#[inline] pub fn len(&self) -> usize {
 					debug_assert_ne!(self.0.len(), 0);
 					self.0.len() - 1
 				}
 
 				#[inline]
-				#[allow(unused)] // clippy wants this function.
+				#[allow(unused)]
 				pub fn is_empty(&self) -> bool {
 					self.len() == 0
 				}
 
-				#[inline]
-				pub fn as_cstr(&self) -> &CStr {
+				#[inline] pub fn as_cstr(&self) -> &CStr {
 					let bytes = self.as_bytes_with_nul();
 					debug_assert!(CStr::from_bytes_with_nul(bytes).is_ok());
 					unsafe { CStr::from_bytes_with_nul_unchecked(bytes) }
@@ -13109,8 +11476,7 @@ pub mod sqlite3
 
 			impl Default for SmallCString 
             {
-				#[inline]
-				fn default() -> Self {
+				#[inline] fn default() -> Self {
 					Self(smallvec![0])
 				}
 			}
@@ -13126,16 +11492,14 @@ pub mod sqlite3
             {
 				type Target = CStr;
 
-				#[inline]
-				fn deref(&self) -> &CStr {
+				#[inline] fn deref(&self) -> &CStr {
 					self.as_cstr()
 				}
 			}
 
 			impl ::borrow::Borrow<str> for SmallCString 
             {
-				#[inline]
-				fn borrow(&self) -> &str {
+				#[inline] fn borrow(&self) -> &str {
 					self.as_str()
 				}
 			}
@@ -13177,8 +11541,7 @@ pub mod sqlite3
             {
 				/// SAFETY: Caller must be certain that `m` a nul-terminated c string
 				/// allocated by `sqlite3_malloc`, and that SQLite expects us to free it!
-				#[inline]
-				pub unsafe fn from_raw_nonnull(ptr: NonNull<c_char>) -> Self {
+				#[inline] pub unsafe fn from_raw_nonnull(ptr: NonNull<c_char>) -> Self {
 					Self {
 						ptr,
 						_boo: PhantomData,
@@ -13187,15 +11550,13 @@ pub mod sqlite3
 
 				/// SAFETY: Caller must be certain that `m` a nul-terminated c string
 				/// allocated by `sqlite3_malloc`, and that SQLite expects us to free it!
-				#[inline]
-				pub unsafe fn from_raw(ptr: *mut c_char) -> Option<Self> {
+				#[inline] pub unsafe fn from_raw(ptr: *mut c_char) -> Option<Self> {
 					NonNull::new(ptr).map(|p| Self::from_raw_nonnull(p))
 				}
 
 				/// Get the pointer behind `self`. After this is called, we no longer manage
 				/// it.
-				#[inline]
-				pub fn into_inner(self) -> NonNull<c_char> {
+				#[inline] pub fn into_inner(self) -> NonNull<c_char> {
 					let p = self.ptr;
 					std::mem::forget(self);
 					p
@@ -13203,25 +11564,22 @@ pub mod sqlite3
 
 				/// Get the pointer behind `self`. After this is called, we no longer manage
 				/// it.
-				#[inline]
-				pub fn into_raw(self) -> *mut c_char {
+				#[inline] pub fn into_raw(self) -> *mut c_char {
 					self.into_inner().as_ptr()
 				}
 
 				/// Borrow the pointer behind `self`. We still manage it when this function
 				/// returns. If you want to relinquish ownership, use `into_raw`.
-				#[inline]
-				pub fn as_ptr(&self) -> *const c_char {
+				#[inline] pub fn as_ptr(&self) -> *const c_char {
 					self.ptr.as_ptr()
 				}
 
-				#[inline]
-				pub fn as_cstr(&self) -> &CStr {
+				#[inline] pub fn as_cstr(&self) -> &CStr {
 					unsafe { CStr::from_ptr(self.as_ptr()) }
 				}
 
-				#[inline]
-				pub fn to_string_lossy(&self) -> std::borrow::Cow<'_, str> {
+				#[inline] pub fn to_string_lossy(&self) -> std::borrow::Cow<'_, str>
+                {
 					self.as_cstr().to_string_lossy()
 				}
 
@@ -13294,8 +11652,7 @@ pub mod sqlite3
 
 			impl Drop for SqliteMallocString
             {
-				#[inline]
-				fn drop(&mut self) {
+				#[inline] fn drop(&mut self) {
 					unsafe { sqlite3_free(self.ptr.as_ptr().cast()) };
 				}
 			}
@@ -13338,6 +11695,7 @@ pub mod sqlite3
 		}
 		
         impl Name for &CStr
+       
         {
 			#[inline] fn as_cstr(&self) -> Result<Named<'_>>
             {
@@ -13427,18 +11785,21 @@ pub mod sqlite3
     {
 		/// Open a new connection to a SQLite database.
 		#[inline] pub fn open<P: AsRef<Path>>(path: P) -> Result<Self>
+       
         {
 			let flags = OpenFlags::default();
 			Self::open_with_flags(path, flags)
 		}
 		/// Open a new connection to an in-memory SQLite database.
 		#[inline] pub fn open_in_memory() -> Result<Self>
+       
         {
 			let flags = OpenFlags::default();
 			Self::open_in_memory_with_flags(flags)
 		}
 		/// Open a new connection to a SQLite database.
 		#[inline] pub fn open_with_flags<P: AsRef<Path>>(path: P, flags: OpenFlags) -> Result<Self>
+       
         {
 			let c_path = path_to_cstring(path.as_ref())?;
 			InnerConnection::open_with_flags(&c_path, flags, None).map(|db| Self
@@ -13455,6 +11816,7 @@ pub mod sqlite3
             flags:OpenFlags,
             vfs:V
         ) -> Result<Self>
+       
         {
 			let c_path = path_to_cstring(path.as_ref())?;
 			let c_vfs = vfs.as_cstr()?;
@@ -13473,6 +11835,7 @@ pub mod sqlite3
         { Self::open_with_flags_and_vfs(":memory:", flags, vfs) }
 		/// Convenience method to run multiple SQL statements (that cannot take any parameters).
 		pub fn execute_batch(&self, sql: &str) -> Result<()>
+       
         {
 			let mut sql = sql;
 			while !sql.is_empty()
@@ -13481,7 +11844,8 @@ pub mod sqlite3
 					.db
 					.borrow_mut()
 					.prepare(self, sql, PrepFlags::default())?;
-				if !stmt.stmt.is_null() && stmt.step()? {
+				if !stmt.stmt.is_null() && stmt.step()?
+                {
 					if false {
 						return Err(Error::ExecuteReturnedResults);
 					}
@@ -13539,6 +11903,7 @@ pub mod sqlite3
 		}
 		/// Prepare a SQL statement for execution.
 		#[inline] pub fn prepare_with_flags(&self, sql: &str, flags: PrepFlags) -> Result<Statement<'_>>
+       
         {
 			let (stmt, tail) = self.db.borrow_mut().prepare(self, sql, flags)?;
 			if tail != 0 && !self.prepare(&sql[tail..])?.stmt.is_null() {
@@ -13561,6 +11926,7 @@ pub mod sqlite3
 		}
 		/// Create a `Connection` from a raw handle.
 		#[inline] pub unsafe fn from_handle(db: *mut driver) -> Result<Self>
+       
         {
 			let db = InnerConnection::new(db, false);
 			Ok(Self {
@@ -13571,6 +11937,7 @@ pub mod sqlite3
 		}
 		/// Create a `Connection` from a raw owned handle.
 		#[inline] pub unsafe fn from_handle_owned(db: *mut driver) -> Result<Self>
+       
         {
 			let db = InnerConnection::new(db, true);
 			Ok(Self
@@ -13741,6 +12108,7 @@ pub mod sqlite3
     {
 		/// Interrupt the query currently executing on another thread.
 		pub fn interrupt(&self)
+       
         {
 			let db_handle = self.db_lock.lock().unwrap();
 			if !db_handle.is_null()
@@ -13774,4 +12142,4 @@ pub mod time
         pub use std::time::{ * };
     }
 }
-// 12727 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// 12145 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
