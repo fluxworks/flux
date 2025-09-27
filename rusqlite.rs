@@ -10,6 +10,8 @@
     unused_attributes,
     unused_imports,
 )]
+
+extern crate hashbrown;
 /*
 
 pub mod _
@@ -84,16 +86,17 @@ pub mod __
 			}
 
 			$($t:tt)*
-		) => {
-			// Declared in the scope of the `bitflags!` call
-			// This type appears in the end-user's API
-			::__declare_public_bitflags! {
+		) =>
+        {
+			__declare_public_bitflags!
+            {
 				$(#[$outer])*
 				$vis struct $BitFlags
 			}
 
 			// Workaround for: https://github.com/bitflags/bitflags/issues/320
-			::__impl_public_bitflags_consts! {
+			__impl_public_bitflags_consts!
+            {
 				$BitFlags: $T {
 					$(
 						$(#[$inner $($args)*])*
@@ -102,27 +105,15 @@ pub mod __
 				}
 			}
 
-			#[allow(
-				dead_code,
-				deprecated,
-				unused_doc_comments,
-				unused_attributes,
-				unused_mut,
-				unused_imports,
-				non_upper_case_globals,
-				clippy::assign_op_pattern,
-				clippy::indexing_slicing,
-				clippy::same_name_method,
-				clippy::iter_without_into_iter,
-			)]
-			const _: () = {
-				// Declared in a "hidden" scope that can't be reached directly
-				// These types don't appear in the end-user's API
-				::__declare_internal_bitflags! {
+			const _: () =
+            {
+				::__declare_internal_bitflags!
+                {
 					$vis struct InternalBitFlags: $T
 				}
 
-				::__impl_internal_bitflags! {
+				::__impl_internal_bitflags!
+                {
 					InternalBitFlags: $T, $BitFlags {
 						$(
 							$(#[$inner $($args)*])*
@@ -130,7 +121,7 @@ pub mod __
 						)*
 					}
 				}
-
+                /*
 				// This is where new library trait implementations can be added
 				::__impl_external_bitflags! {
 					InternalBitFlags: $T, $BitFlags {
@@ -139,22 +130,26 @@ pub mod __
 							const $Flag;
 						)*
 					}
-				}
+				} */
 
-				::__impl_public_bitflags_forward! {
+				::__impl_public_bitflags_forward!
+                {
 					$BitFlags: $T, InternalBitFlags
 				}
 
-				::__impl_public_bitflags_ops! {
+				::__impl_public_bitflags_ops!
+                {
 					$BitFlags
 				}
 
-				::__impl_public_bitflags_iter! {
+				::__impl_public_bitflags_iter!
+                {
 					$BitFlags: $T, $BitFlags
 				}
 			};
-
-			$crate::bitflags! {
+            
+            bitflags!
+            {
 				$($t)*
 			}
 		};
@@ -510,53 +505,6 @@ pub mod __
 			$($named)*
 		};
 	}
-	/// Implements traits from external libraries for the internal bitflags type.
-	#[macro_export] macro_rules! __impl_external_bitflags
-	{
-		(
-			$InternalBitFlags:ident: $T:ty, $PublicBitFlags:ident
-			{
-				$(
-					$(#[$inner:ident $($args:tt)*])*
-					const $Flag:tt;
-				)*
-			}
-		) =>
-		{
-			::__impl_external_bitflags_serde!
-			{
-				$InternalBitFlags: $T, $PublicBitFlags
-				{
-					$(
-						$(#[$inner $($args)*])*
-						const $Flag;
-					)*
-				}
-			}
-
-			::__impl_external_bitflags_arbitrary!
-			{
-				$InternalBitFlags: $T, $PublicBitFlags
-				{
-					$(
-						$(#[$inner $($args)*])*
-						const $Flag;
-					)*
-				}
-			}
-
-			::__impl_external_bitflags_bytemuck!
-			{
-				$InternalBitFlags: $T, $PublicBitFlags
-				{
-					$(
-						$(#[$inner $($args)*])*
-						const $Flag;
-					)*
-				}
-			}
-		};
-	}
 	/// Declare the `bitflags`-facing bitflags struct.
 	#[macro_export] macro_rules! __declare_internal_bitflags
 	{
@@ -582,7 +530,7 @@ pub mod __
 			}
 		) =>
 		{
-			impl ::__private::PublicFlags for $PublicBitFlags
+			impl ::parsers::bitflags::PublicFlags for $PublicBitFlags
 			{
 				type Primitive = $T;
 				type Internal = $InternalBitFlags;
@@ -597,7 +545,7 @@ pub mod __
 			{
 				fn fmt(&self, f: &mut ::fmt::Formatter<'_>) -> fmt::Result
 				{
-					if self.is_empty() { ::write!(f, "{:#x}", <$T as ::parsers::bitflags::Bits>::EMPTY) }
+					if self.is_empty() { write!(f, "{:#x}", <$T as ::parsers::bitflags::Bits>::EMPTY) }
 					else { ::fmt::Display::fmt(self, f) }
 				}
 			}
@@ -669,7 +617,7 @@ pub mod __
 			$vis:vis struct $PublicBitFlags:ident
 		) => {
 			$(#[$outer])*
-			$vis struct $PublicBitFlags(<$PublicBitFlags as $crate::__private::PublicFlags>::Internal);
+			$vis struct $PublicBitFlags(<$PublicBitFlags as ::parsers::bitflags::PublicFlags>::Internal);
 		};
 	}
 	/// Implement functions on the public (user-facing) bitflags type.
@@ -783,8 +731,10 @@ pub mod __
 					const $Flag:tt = $value:expr;
 				)*
 			}
-		) => {
-			$crate::__impl_bitflags! {
+		) =>
+        {
+            __impl_bitflags!
+            {
 				$(#[$outer])*
 				$BitFlags: $T {
 					fn empty() {
@@ -796,10 +746,11 @@ pub mod __
 						let mut i = 0;
 
 						$(
-							$crate::__bitflags_expr_safe_attrs!(
+                            __bitflags_expr_safe_attrs!
+                            (
 								$(#[$inner $($args)*])*
 								{{
-									let flag = <$PublicBitFlags as $crate::Flags>::FLAGS[i].value().bits();
+									let flag = <$PublicBitFlags as ::parsers::bitflags::Flags>::FLAGS[i].value().bits();
 
 									truncated = truncated | flag;
 									i += 1;
@@ -835,13 +786,14 @@ pub mod __
 
 					fn from_name(name) {
 						$(
-							$crate::__bitflags_flag!({
+							__bitflags_flag!({
 								name: $Flag,
 								named: {
-									$crate::__bitflags_expr_safe_attrs!(
+									__bitflags_expr_safe_attrs
+                                    !(
 										$(#[$inner $($args)*])*
 										{
-											if name == ::stringify!($Flag) {
+											if name == stringify!($Flag) {
 												return ::option::Option::Some(Self($PublicBitFlags::$Flag.bits()));
 											}
 										}
@@ -856,7 +808,7 @@ pub mod __
 					}
 
 					fn is_empty(f) {
-						f.bits() == <$T as ::Bits>::EMPTY
+						f.bits() == <$T as ::parsers::bitflags::Bits>::EMPTY
 					}
 
 					fn is_all(f) {
@@ -865,8 +817,9 @@ pub mod __
 						Self::all().bits() | f.bits() == f.bits()
 					}
 
-					fn intersects(f, other) {
-						f.bits() & other.bits() != <$T as ::Bits>::EMPTY
+					fn intersects(f, other)
+                    {
+						f.bits() & other.bits() != <$T as ::parsers::bitflags::Bits>::EMPTY
 					}
 
 					fn contains(f, other) {
@@ -922,28 +875,26 @@ pub mod __
 		(
 			$(#[$outer:meta])*
 			$BitFlags:ident: $T:ty, $PublicBitFlags:ident
-		) => {
+		) =>
+        {
 			$(#[$outer])*
 			impl $BitFlags {
 				/// Yield a set of contained flags values.
-				///
-				/// Each yielded flags value will correspond to a defined named flag. Any unknown bits
-				/// will be yielded together as a final flags value.
-				#[inline] pub const fn iter(&self) -> $crate::iter::Iter<$PublicBitFlags> {
-					$crate::iter::Iter::__private_const_new(
-						<$PublicBitFlags as $crate::Flags>::FLAGS,
+				#[inline] pub const fn iter(&self) -> ::iter::Iter<$PublicBitFlags>
+                {
+					$crate::iter::Iter::__private_const_new
+                    (
+						<$PublicBitFlags as ::parsers::bitflags::Flags>::FLAGS,
 						$PublicBitFlags::from_bits_retain(self.bits()),
 						$PublicBitFlags::from_bits_retain(self.bits()),
 					)
 				}
-
 				/// Yield a set of contained named flags values.
-				///
-				/// This method is like [`iter`](#method.iter), except only yields bits in contained named flags.
-				/// Any unknown bits, or bits not corresponding to a contained flag will not be yielded.
-				#[inline] pub const fn iter_names(&self) -> $crate::iter::IterNames<$PublicBitFlags> {
-					$crate::iter::IterNames::__private_const_new(
-						<$PublicBitFlags as $crate::Flags>::FLAGS,
+				#[inline] pub const fn iter_names(&self) -> ::iter::IterNames<$PublicBitFlags>
+                {
+					$crate::iter::IterNames::__private_const_new
+                    (
+						<$PublicBitFlags as ::parsers::bitflags::Flags>::FLAGS,
 						$PublicBitFlags::from_bits_retain(self.bits()),
 						$PublicBitFlags::from_bits_retain(self.bits()),
 					)
@@ -1160,20 +1111,19 @@ pub mod __
 			}
 
 			$(#[$outer])*
-			impl $crate::Flags for $PublicBitFlags {
-				const FLAGS: &'static [$crate::Flag<$PublicBitFlags>] = &[
+			impl ::parsers::bitflags::Flags for $PublicBitFlags
+            {
+				const FLAGS: &'static [ ::parsers::bitflags::Flag<$PublicBitFlags>] = &[
 					$(
-						$crate::__bitflags_flag!({
+                        __bitflags_flag!(
+                        {
 							name: $Flag,
 							named: {
-								$crate::__bitflags_expr_safe_attrs!(
+								__bitflags_expr_safe_attrs!
+                                (
 									$(#[$inner $($args)*])*
 									{
-										#[allow(
-											deprecated,
-											non_upper_case_globals,
-										)]
-										$crate::Flag::new(::stringify!($Flag), $PublicBitFlags::$Flag)
+										::parsers::bitflags::Flag::new( stringify!($Flag), $PublicBitFlags::$Flag)
 									}
 								)
 							},
@@ -4204,6 +4154,81 @@ pub mod fmt
 pub mod hash
 {
 	pub use std::hash::{ * };
+    use::
+    {
+        borrow::{ Borrow },
+        mem::{ self, MaybeUninit },
+        ptr::{ self, NonNull },
+        *,
+    };
+    /*
+        use core::{
+        borrow::Borrow,
+        fmt,
+        hash::{BuildHasher, Hash},
+    };
+
+    use crate::linked_hash_map::{self, LinkedHashMap};
+    use crate::DefaultHashBuilder;
+
+    pub use crate::linked_hash_map::{
+        Drain, Entry, IntoIter, Iter, IterMut, OccupiedEntry, RawEntryBuilder, RawEntryBuilderMut,
+        RawOccupiedEntryMut, RawVacantEntryMut, VacantEntry,
+    };
+
+    alloc::Layout,
+    borrow::Borrow,
+    cmp::Ordering,
+    fmt,
+    hash::{BuildHasher, Hash, Hasher},
+    iter::FromIterator,
+    marker::PhantomData,
+    mem::{self, MaybeUninit},
+    ops::{Index, IndexMut},
+    ptr::{self, NonNull},
+    */
+    /// Default hash builder, matches hashbrown's default hasher.
+    #[derive(Clone, Copy, Default, Debug)]
+    pub struct DefaultHashBuilder( hashbrown::DefaultHashBuilder );
+    
+    struct Node<K, V>
+    {
+        entry: MaybeUninit<(K, V)>,
+        links: Links<K, V>,
+    }
+    
+    #[derive( Clone, Copy )]
+    struct ValueLinks<K, V>
+    {
+        next: NonNull<Node<K, V>>,
+        prev: NonNull<Node<K, V>>,
+    }
+    
+    struct FreeLink<K, V>
+    {
+        next: Option<NonNull<Node<K, V>>>,
+    }
+    
+    union Links<K, V>
+    {
+        value: ValueLinks<K, V>,
+        free: FreeLink<K, V>,
+    }
+    /// A version of `HashMap` that has a user controllable order for its entries.
+    pub struct LinkedHashMap<K, V, S = DefaultHashBuilder> where S:Copy
+    {
+        table: hashbrown::hash_table::HashTable<NonNull<Node<K, V>>>,
+        values: Option<NonNull<Node<K, V>>>,
+        free: Option<NonNull<Node<K, V>>>,
+        builder:Option<S>,
+    }
+    
+    pub struct LruCache<K, V, S = DefaultHashBuilder> where S:Copy
+    {
+        map: LinkedHashMap<K, V, S>,
+        max_size: usize,
+        builder:Option<S>,
+    }
 }
 
 pub mod hint
@@ -5357,13 +5382,21 @@ pub mod sqlite3
 				>,
 			) -> ::os::raw::c_int;
 			pub static sqlite3_version: [::os::raw::c_char; 0usize];
+            
 			pub fn sqlite3_libversion() -> *const ::os::raw::c_char;
+            
 			pub fn sqlite3_sourceid() -> *const ::os::raw::c_char;
+            
 			pub fn sqlite3_libversion_number() -> ::os::raw::c_int;
+            
 			pub fn sqlite3_compileoption_used( zOptName: *const ::os::raw::c_char ) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_compileoption_get(N: ::os::raw::c_int) -> *const ::os::raw::c_char;
+            
 			pub fn sqlite3_threadsafe() -> ::os::raw::c_int;
+            
 			pub fn sqlite3_close(arg1: *mut sqlite3) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_exec(
 				arg1: *mut sqlite3,
 				sql: *const ::os::raw::c_char,
@@ -5378,25 +5411,38 @@ pub mod sqlite3
 				arg2: *mut ::os::raw::c_void,
 				errmsg: *mut *mut ::os::raw::c_char,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_initialize() -> ::os::raw::c_int;
+            
 			pub fn sqlite3_shutdown() -> ::os::raw::c_int;
+            
 			pub fn sqlite3_os_init() -> ::os::raw::c_int;
+            
 			pub fn sqlite3_os_end() -> ::os::raw::c_int;
+            
 			pub fn sqlite3_config(arg1: ::os::raw::c_int, ...) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_db_config(
 				arg1: *mut sqlite3,
 				op: ::os::raw::c_int,
 				...
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_extended_result_codes(
 				arg1: *mut sqlite3,
 				onoff: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_last_insert_rowid(arg1: *mut sqlite3) -> sqlite3_int64;
+            
 			pub fn sqlite3_changes(arg1: *mut sqlite3) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_total_changes(arg1: *mut sqlite3) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_interrupt(arg1: *mut sqlite3);
+            
 			pub fn sqlite3_complete(sql: *const ::os::raw::c_char) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_busy_handler(
 				arg1: *mut sqlite3,
 				arg2: ::option::Option<
@@ -5407,10 +5453,12 @@ pub mod sqlite3
 				>,
 				arg3: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_busy_timeout(
 				arg1: *mut sqlite3,
 				ms: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_get_table(
 				db: *mut sqlite3,
 				zSql: *const ::os::raw::c_char,
@@ -5419,30 +5467,43 @@ pub mod sqlite3
 				pnColumn: *mut ::os::raw::c_int,
 				pzErrmsg: *mut *mut ::os::raw::c_char,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_free_table(result: *mut *mut ::os::raw::c_char);
+            
 			pub fn sqlite3_mprintf(arg1: *const ::os::raw::c_char, ...)
 				-> *mut ::os::raw::c_char;
+            
 			pub fn sqlite3_snprintf(
 				arg1: ::os::raw::c_int,
 				arg2: *mut ::os::raw::c_char,
 				arg3: *const ::os::raw::c_char,
 				...
 			) -> *mut ::os::raw::c_char;
+            
 			pub fn sqlite3_malloc(arg1: ::os::raw::c_int) -> *mut ::os::raw::c_void;
+            
 			pub fn sqlite3_malloc64(arg1: sqlite3_uint64) -> *mut ::os::raw::c_void;
+            
 			pub fn sqlite3_realloc(
 				arg1: *mut ::os::raw::c_void,
 				arg2: ::os::raw::c_int,
 			) -> *mut ::os::raw::c_void;
+            
 			pub fn sqlite3_realloc64(
 				arg1: *mut ::os::raw::c_void,
 				arg2: sqlite3_uint64,
 			) -> *mut ::os::raw::c_void;
+            
 			pub fn sqlite3_free(arg1: *mut ::os::raw::c_void);
+            
 			pub fn sqlite3_msize(arg1: *mut ::os::raw::c_void) -> sqlite3_uint64;
+            
 			pub fn sqlite3_memory_used() -> sqlite3_int64;
+            
 			pub fn sqlite3_memory_highwater(resetFlag: ::os::raw::c_int) -> sqlite3_int64;
+            
 			pub fn sqlite3_randomness(N: ::os::raw::c_int, P: *mut ::os::raw::c_void);
+            
 			pub fn sqlite3_set_authorizer(
 				arg1: *mut sqlite3,
 				xAuth: ::option::Option<
@@ -5457,6 +5518,7 @@ pub mod sqlite3
 				>,
 				pUserData: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_trace(
 				arg1: *mut sqlite3,
 				xTrace: ::option::Option<
@@ -5467,6 +5529,7 @@ pub mod sqlite3
 				>,
 				arg2: *mut ::os::raw::c_void,
 			) -> *mut ::os::raw::c_void;
+            
 			pub fn sqlite3_profile(
 				arg1: *mut sqlite3,
 				xProfile: ::option::Option<
@@ -5478,6 +5541,7 @@ pub mod sqlite3
 				>,
 				arg2: *mut ::os::raw::c_void,
 			) -> *mut ::os::raw::c_void;
+            
 			pub fn sqlite3_trace_v2(
 				arg1: *mut sqlite3,
 				uMask: ::os::raw::c_uint,
@@ -5491,6 +5555,7 @@ pub mod sqlite3
 				>,
 				pCtx: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_progress_handler(
 				arg1: *mut sqlite3,
 				arg2: ::os::raw::c_int,
@@ -5499,39 +5564,50 @@ pub mod sqlite3
 				>,
 				arg4: *mut ::os::raw::c_void,
 			);
+            
 			pub fn sqlite3_open(
 				filename: *const ::os::raw::c_char,
 				ppDb: *mut *mut sqlite3,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_open_v2(
 				filename: *const ::os::raw::c_char,
 				ppDb: *mut *mut sqlite3,
 				flags: ::os::raw::c_int,
 				zVfs: *const ::os::raw::c_char,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_uri_parameter(
 				zFilename: *const ::os::raw::c_char,
 				zParam: *const ::os::raw::c_char,
 			) -> *const ::os::raw::c_char;
+            
 			pub fn sqlite3_uri_boolean(
 				zFile: *const ::os::raw::c_char,
 				zParam: *const ::os::raw::c_char,
 				bDefault: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_uri_int64(
 				arg1: *const ::os::raw::c_char,
 				arg2: *const ::os::raw::c_char,
 				arg3: sqlite3_int64,
 			) -> sqlite3_int64;
+            
 			pub fn sqlite3_errcode(db: *mut sqlite3) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_extended_errcode(db: *mut sqlite3) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_errmsg(arg1: *mut sqlite3) -> *const ::os::raw::c_char;
+            
 			pub fn sqlite3_errstr(arg1: ::os::raw::c_int) -> *const ::os::raw::c_char;
+            
 			pub fn sqlite3_limit(
 				arg1: *mut sqlite3,
 				id: ::os::raw::c_int,
 				newVal: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_prepare_v2(
 				db: *mut sqlite3,
 				zSql: *const ::os::raw::c_char,
@@ -5539,10 +5615,15 @@ pub mod sqlite3
 				ppStmt: *mut *mut sqlite3_stmt,
 				pzTail: *mut *const ::os::raw::c_char,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_sql(pStmt: *mut sqlite3_stmt) -> *const ::os::raw::c_char;
+            
 			pub fn sqlite3_expanded_sql(pStmt: *mut sqlite3_stmt) -> *mut ::os::raw::c_char;
+            
 			pub fn sqlite3_stmt_readonly(pStmt: *mut sqlite3_stmt) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_stmt_busy(arg1: *mut sqlite3_stmt) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_bind_blob(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
@@ -5550,6 +5631,7 @@ pub mod sqlite3
 				n: ::os::raw::c_int,
 				arg4: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_bind_blob64(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
@@ -5557,25 +5639,30 @@ pub mod sqlite3
 				arg4: sqlite3_uint64,
 				arg5: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_bind_double(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
 				arg3: f64,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_bind_int(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
 				arg3: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_bind_int64(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
 				arg3: sqlite3_int64,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_bind_null(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_bind_text(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
@@ -5583,6 +5670,7 @@ pub mod sqlite3
 				arg4: ::os::raw::c_int,
 				arg5: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_bind_text64(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
@@ -5591,85 +5679,111 @@ pub mod sqlite3
 				arg5: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
 				encoding: ::os::raw::c_uchar,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_bind_value(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
 				arg3: *const sqlite3_value,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_bind_zeroblob(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
 				n: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_bind_zeroblob64(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
 				arg3: sqlite3_uint64,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_bind_parameter_count(arg1: *mut sqlite3_stmt) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_bind_parameter_name(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
 			) -> *const ::os::raw::c_char;
+            
 			pub fn sqlite3_bind_parameter_index(
 				arg1: *mut sqlite3_stmt,
 				zName: *const ::os::raw::c_char,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_clear_bindings(arg1: *mut sqlite3_stmt) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_column_count(pStmt: *mut sqlite3_stmt) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_column_name(
 				arg1: *mut sqlite3_stmt,
 				N: ::os::raw::c_int,
 			) -> *const ::os::raw::c_char;
+            
 			pub fn sqlite3_column_database_name(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
 			) -> *const ::os::raw::c_char;
+            
 			pub fn sqlite3_column_table_name(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
 			) -> *const ::os::raw::c_char;
+            
 			pub fn sqlite3_column_origin_name(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
 			) -> *const ::os::raw::c_char;
+            
 			pub fn sqlite3_column_decltype(
 				arg1: *mut sqlite3_stmt,
 				arg2: ::os::raw::c_int,
 			) -> *const ::os::raw::c_char;
+            
 			pub fn sqlite3_step(arg1: *mut sqlite3_stmt) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_data_count(pStmt: *mut sqlite3_stmt) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_column_blob(
 				arg1: *mut sqlite3_stmt,
 				iCol: ::os::raw::c_int,
 			) -> *const ::os::raw::c_void;
+            
 			pub fn sqlite3_column_bytes(
 				arg1: *mut sqlite3_stmt,
 				iCol: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_column_double(arg1: *mut sqlite3_stmt, iCol: ::os::raw::c_int) -> f64;
+            
 			pub fn sqlite3_column_int(
 				arg1: *mut sqlite3_stmt,
 				iCol: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_column_int64(
 				arg1: *mut sqlite3_stmt,
 				iCol: ::os::raw::c_int,
 			) -> sqlite3_int64;
+            
 			pub fn sqlite3_column_text(
 				arg1: *mut sqlite3_stmt,
 				iCol: ::os::raw::c_int,
 			) -> *const ::os::raw::c_uchar;
+            
 			pub fn sqlite3_column_type(
 				arg1: *mut sqlite3_stmt,
 				iCol: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_column_value(
 				arg1: *mut sqlite3_stmt,
 				iCol: ::os::raw::c_int,
 			) -> *mut sqlite3_value;
+            
 			pub fn sqlite3_finalize(pStmt: *mut sqlite3_stmt) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_reset(pStmt: *mut sqlite3_stmt) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_create_function_v2(
 				db: *mut sqlite3,
 				zFunctionName: *const ::os::raw::c_char,
@@ -5693,14 +5807,20 @@ pub mod sqlite3
 				xFinal: ::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_context)>,
 				xDestroy: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_aggregate_count(arg1: *mut sqlite3_context) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_expired(arg1: *mut sqlite3_stmt) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_transfer_bindings(
 				arg1: *mut sqlite3_stmt,
 				arg2: *mut sqlite3_stmt,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_global_recover() -> ::os::raw::c_int;
+            
 			pub fn sqlite3_thread_cleanup();
+            
 			pub fn sqlite3_memory_alarm(
 				arg1: ::option::Option<
 					unsafe extern "C" fn
@@ -5712,63 +5832,91 @@ pub mod sqlite3
 				arg2: *mut ::os::raw::c_void,
 				arg3: sqlite3_int64,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_value_blob(arg1: *mut sqlite3_value) -> *const ::os::raw::c_void;
+            
 			pub fn sqlite3_value_bytes(arg1: *mut sqlite3_value) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_value_double(arg1: *mut sqlite3_value) -> f64;
+            
 			pub fn sqlite3_value_int(arg1: *mut sqlite3_value) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_value_int64(arg1: *mut sqlite3_value) -> sqlite3_int64;
+            
 			pub fn sqlite3_value_text(arg1: *mut sqlite3_value) -> *const ::os::raw::c_uchar;
+            
 			pub fn sqlite3_value_type(arg1: *mut sqlite3_value) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_value_numeric_type(arg1: *mut sqlite3_value) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_value_subtype(arg1: *mut sqlite3_value) -> ::os::raw::c_uint;
+            
 			pub fn sqlite3_value_dup(arg1: *const sqlite3_value) -> *mut sqlite3_value;
+            
 			pub fn sqlite3_value_free(arg1: *mut sqlite3_value);
+            
 			pub fn sqlite3_aggregate_context(
 				arg1: *mut sqlite3_context,
 				nBytes: ::os::raw::c_int,
 			) -> *mut ::os::raw::c_void;
+            
 			pub fn sqlite3_user_data(arg1: *mut sqlite3_context) -> *mut ::os::raw::c_void;
+            
 			pub fn sqlite3_context_db_handle(arg1: *mut sqlite3_context) -> *mut sqlite3;
+            
 			pub fn sqlite3_get_auxdata(
 				arg1: *mut sqlite3_context,
 				N: ::os::raw::c_int,
 			) -> *mut ::os::raw::c_void;
+            
 			pub fn sqlite3_set_auxdata(
 				arg1: *mut sqlite3_context,
 				N: ::os::raw::c_int,
 				arg2: *mut ::os::raw::c_void,
 				arg3: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
 			);
+            
 			pub fn sqlite3_result_blob(
 				arg1: *mut sqlite3_context,
 				arg2: *const ::os::raw::c_void,
 				arg3: ::os::raw::c_int,
 				arg4: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
 			);
+            
 			pub fn sqlite3_result_blob64(
 				arg1: *mut sqlite3_context,
 				arg2: *const ::os::raw::c_void,
 				arg3: sqlite3_uint64,
 				arg4: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
 			);
+            
 			pub fn sqlite3_result_double(arg1: *mut sqlite3_context, arg2: f64);
+            
 			pub fn sqlite3_result_error(
 				arg1: *mut sqlite3_context,
 				arg2: *const ::os::raw::c_char,
 				arg3: ::os::raw::c_int,
 			);
+            
 			pub fn sqlite3_result_error_toobig(arg1: *mut sqlite3_context);
+            
 			pub fn sqlite3_result_error_nomem(arg1: *mut sqlite3_context);
+            
 			pub fn sqlite3_result_error_code(arg1: *mut sqlite3_context, arg2: ::os::raw::c_int);
+            
 			pub fn sqlite3_result_int(arg1: *mut sqlite3_context, arg2: ::os::raw::c_int);
+            
 			pub fn sqlite3_result_int64(arg1: *mut sqlite3_context, arg2: sqlite3_int64);
+            
 			pub fn sqlite3_result_null(arg1: *mut sqlite3_context);
+            
 			pub fn sqlite3_result_text(
 				arg1: *mut sqlite3_context,
 				arg2: *const ::os::raw::c_char,
 				arg3: ::os::raw::c_int,
 				arg4: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
 			);
+            
 			pub fn sqlite3_result_text64(
 				arg1: *mut sqlite3_context,
 				arg2: *const ::os::raw::c_char,
@@ -5776,13 +5924,18 @@ pub mod sqlite3
 				arg4: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
 				encoding: ::os::raw::c_uchar,
 			);
+            
 			pub fn sqlite3_result_value(arg1: *mut sqlite3_context, arg2: *mut sqlite3_value);
+            
 			pub fn sqlite3_result_zeroblob(arg1: *mut sqlite3_context, n: ::os::raw::c_int);
+            
 			pub fn sqlite3_result_zeroblob64(
 				arg1: *mut sqlite3_context,
 				n: sqlite3_uint64,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_result_subtype(arg1: *mut sqlite3_context, arg2: ::os::raw::c_uint);
+            
 			pub fn sqlite3_create_collation_v2(
 				arg1: *mut sqlite3,
 				zName: *const ::os::raw::c_char,
@@ -5799,6 +5952,7 @@ pub mod sqlite3
 				>,
 				xDestroy: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_collation_needed(
 				arg1: *mut sqlite3,
 				arg2: *mut ::os::raw::c_void,
@@ -5811,20 +5965,27 @@ pub mod sqlite3
 					),
 				>,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_sleep(arg1: ::os::raw::c_int) -> ::os::raw::c_int;
 			pub static mut sqlite3_temp_directory: *mut ::os::raw::c_char;
 			pub static mut sqlite3_data_directory: *mut ::os::raw::c_char;
+            
 			pub fn sqlite3_get_autocommit(arg1: *mut sqlite3) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_db_handle(arg1: *mut sqlite3_stmt) -> *mut sqlite3;
+            
 			pub fn sqlite3_db_filename(
 				db: *mut sqlite3,
 				zDbName: *const ::os::raw::c_char,
 			) -> *const ::os::raw::c_char;
+            
 			pub fn sqlite3_db_readonly(
 				db: *mut sqlite3,
 				zDbName: *const ::os::raw::c_char,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_next_stmt(pDb: *mut sqlite3, pStmt: *mut sqlite3_stmt) -> *mut sqlite3_stmt;
+            
 			pub fn sqlite3_commit_hook(
 				arg1: *mut sqlite3,
 				arg2: ::option::Option<
@@ -5832,11 +5993,13 @@ pub mod sqlite3
 				>,
 				arg3: *mut ::os::raw::c_void,
 			) -> *mut ::os::raw::c_void;
+            
 			pub fn sqlite3_rollback_hook(
 				arg1: *mut sqlite3,
 				arg2: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
 				arg3: *mut ::os::raw::c_void,
 			) -> *mut ::os::raw::c_void;
+            
 			pub fn sqlite3_update_hook(
 				arg1: *mut sqlite3,
 				arg2: ::option::Option<
@@ -5850,11 +6013,17 @@ pub mod sqlite3
 				>,
 				arg3: *mut ::os::raw::c_void,
 			) -> *mut ::os::raw::c_void;
+            
 			pub fn sqlite3_enable_shared_cache(arg1: ::os::raw::c_int) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_release_memory(arg1: ::os::raw::c_int) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_db_release_memory(arg1: *mut sqlite3) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_soft_heap_limit64(N: sqlite3_int64) -> sqlite3_int64;
+            
 			pub fn sqlite3_soft_heap_limit(N: ::os::raw::c_int);
+            
 			pub fn sqlite3_table_column_metadata(
 				db: *mut sqlite3,
 				zDbName: *const ::os::raw::c_char,
@@ -5866,17 +6035,21 @@ pub mod sqlite3
 				pPrimaryKey: *mut ::os::raw::c_int,
 				pAutoinc: *mut ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_load_extension(
 				db: *mut sqlite3,
 				zFile: *const ::os::raw::c_char,
 				zProc: *const ::os::raw::c_char,
 				pzErrMsg: *mut *mut ::os::raw::c_char,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_enable_load_extension(
 				db: *mut sqlite3,
 				onoff: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_reset_auto_extension();
+            
 			pub fn sqlite3_create_module_v2(
 				db: *mut sqlite3,
 				zName: *const ::os::raw::c_char,
@@ -5884,15 +6057,18 @@ pub mod sqlite3
 				pClientData: *mut ::os::raw::c_void,
 				xDestroy: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_declare_vtab(
 				arg1: *mut sqlite3,
 				zSQL: *const ::os::raw::c_char,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_overload_function(
 				arg1: *mut sqlite3,
 				zFuncName: *const ::os::raw::c_char,
 				nArg: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_blob_open(
 				arg1: *mut sqlite3,
 				zDb: *const ::os::raw::c_char,
@@ -5902,57 +6078,78 @@ pub mod sqlite3
 				flags: ::os::raw::c_int,
 				ppBlob: *mut *mut sqlite3_blob,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_blob_reopen(
 				arg1: *mut sqlite3_blob,
 				arg2: sqlite3_int64,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_blob_close(arg1: *mut sqlite3_blob) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_blob_bytes(arg1: *mut sqlite3_blob) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_blob_read(
 				arg1: *mut sqlite3_blob,
 				Z: *mut ::os::raw::c_void,
 				N: ::os::raw::c_int,
 				iOffset: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_blob_write(
 				arg1: *mut sqlite3_blob,
 				z: *const ::os::raw::c_void,
 				n: ::os::raw::c_int,
 				iOffset: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_vfs_find(zVfsName: *const ::os::raw::c_char) -> *mut sqlite3_vfs;
+            
 			pub fn sqlite3_vfs_register(
 				arg1: *mut sqlite3_vfs,
 				makeDflt: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_vfs_unregister(arg1: *mut sqlite3_vfs) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_mutex_alloc(arg1: ::os::raw::c_int) -> *mut sqlite3_mutex;
+            
 			pub fn sqlite3_mutex_free(arg1: *mut sqlite3_mutex);
+            
 			pub fn sqlite3_mutex_enter(arg1: *mut sqlite3_mutex);
+            
 			pub fn sqlite3_mutex_try(arg1: *mut sqlite3_mutex) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_mutex_leave(arg1: *mut sqlite3_mutex);
+            
 			pub fn sqlite3_mutex_held(arg1: *mut sqlite3_mutex) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_mutex_notheld(arg1: *mut sqlite3_mutex) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_db_mutex(arg1: *mut sqlite3) -> *mut sqlite3_mutex;
+            
 			pub fn sqlite3_file_control(
 				arg1: *mut sqlite3,
 				zDbName: *const ::os::raw::c_char,
 				op: ::os::raw::c_int,
 				arg2: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_test_control(op: ::os::raw::c_int, ...) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_status(
 				op: ::os::raw::c_int,
 				pCurrent: *mut ::os::raw::c_int,
 				pHighwater: *mut ::os::raw::c_int,
 				resetFlag: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_status64(
 				op: ::os::raw::c_int,
 				pCurrent: *mut sqlite3_int64,
 				pHighwater: *mut sqlite3_int64,
 				resetFlag: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_db_status(
 				arg1: *mut sqlite3,
 				op: ::os::raw::c_int,
@@ -5960,24 +6157,31 @@ pub mod sqlite3
 				pHiwtr: *mut ::os::raw::c_int,
 				resetFlg: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_stmt_status(
 				arg1: *mut sqlite3_stmt,
 				op: ::os::raw::c_int,
 				resetFlg: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_backup_init(
 				pDest: *mut sqlite3,
 				zDestName: *const ::os::raw::c_char,
 				pSource: *mut sqlite3,
 				zSourceName: *const ::os::raw::c_char,
 			) -> *mut sqlite3_backup;
+            
 			pub fn sqlite3_backup_step(
 				p: *mut sqlite3_backup,
 				nPage: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_backup_finish(p: *mut sqlite3_backup) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_backup_remaining(p: *mut sqlite3_backup) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_backup_pagecount(p: *mut sqlite3_backup) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_unlock_notify(
 				pBlocked: *mut sqlite3,
 				xNotify: ::option::Option<
@@ -5988,29 +6192,35 @@ pub mod sqlite3
 				>,
 				pNotifyArg: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_stricmp(
 				arg1: *const ::os::raw::c_char,
 				arg2: *const ::os::raw::c_char,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_strnicmp(
 				arg1: *const ::os::raw::c_char,
 				arg2: *const ::os::raw::c_char,
 				arg3: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_strglob(
 				zGlob: *const ::os::raw::c_char,
 				zStr: *const ::os::raw::c_char,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_strlike(
 				zGlob: *const ::os::raw::c_char,
 				zStr: *const ::os::raw::c_char,
 				cEsc: ::os::raw::c_uint,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_log(
 				iErrCode: ::os::raw::c_int,
 				zFormat: *const ::os::raw::c_char,
 				...
 			);
+            
 			pub fn sqlite3_wal_hook(
 				arg1: *mut sqlite3,
 				arg2: ::option::Option<
@@ -6023,14 +6233,17 @@ pub mod sqlite3
 				>,
 				arg3: *mut ::os::raw::c_void,
 			) -> *mut ::os::raw::c_void;
+            
 			pub fn sqlite3_wal_autocheckpoint(
 				db: *mut sqlite3,
 				N: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_wal_checkpoint(
 				db: *mut sqlite3,
 				zDb: *const ::os::raw::c_char,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_wal_checkpoint_v2(
 				db: *mut sqlite3,
 				zDb: *const ::os::raw::c_char,
@@ -6038,20 +6251,26 @@ pub mod sqlite3
 				pnLog: *mut ::os::raw::c_int,
 				pnCkpt: *mut ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_vtab_config(
 				arg1: *mut sqlite3,
 				op: ::os::raw::c_int,
 				...
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_vtab_on_conflict(arg1: *mut sqlite3) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_stmt_scanstatus(
 				pStmt: *mut sqlite3_stmt,
 				idx: ::os::raw::c_int,
 				iScanStatusOp: ::os::raw::c_int,
 				pOut: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_stmt_scanstatus_reset(arg1: *mut sqlite3_stmt);
+            
 			pub fn sqlite3_db_cacheflush(arg1: *mut sqlite3) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_preupdate_hook(
 				db: *mut sqlite3,
 				xPreUpdate: ::option::Option<
@@ -6067,34 +6286,44 @@ pub mod sqlite3
 				>,
 				arg1: *mut ::os::raw::c_void,
 			) -> *mut ::os::raw::c_void;
+            
 			pub fn sqlite3_preupdate_old(
 				arg1: *mut sqlite3,
 				arg2: ::os::raw::c_int,
 				arg3: *mut *mut sqlite3_value,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_preupdate_count(arg1: *mut sqlite3) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_preupdate_depth(arg1: *mut sqlite3) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_preupdate_new(
 				arg1: *mut sqlite3,
 				arg2: ::os::raw::c_int,
 				arg3: *mut *mut sqlite3_value,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_system_errno(arg1: *mut sqlite3) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_snapshot_get(
 				db: *mut sqlite3,
 				zSchema: *const ::os::raw::c_char,
 				ppSnapshot: *mut *mut sqlite3_snapshot,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_snapshot_open(
 				db: *mut sqlite3,
 				zSchema: *const ::os::raw::c_char,
 				pSnapshot: *mut sqlite3_snapshot,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_snapshot_free(arg1: *mut sqlite3_snapshot);
+            
 			pub fn sqlite3_snapshot_cmp(
 				p1: *mut sqlite3_snapshot,
 				p2: *mut sqlite3_snapshot,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_rtree_geometry_callback(
 				db: *mut sqlite3,
 				zGeom: *const ::os::raw::c_char,
@@ -6108,6 +6337,7 @@ pub mod sqlite3
 				>,
 				pContext: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3_rtree_query_callback(
 				db: *mut sqlite3,
 				zQueryFunc: *const ::os::raw::c_char,
@@ -6117,24 +6347,30 @@ pub mod sqlite3
 				pContext: *mut ::os::raw::c_void,
 				xDestructor: ::option::Option<unsafe extern "C" fn(arg1: *mut ::os::raw::c_void)>,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3session_create(
 				db: *mut sqlite3,
 				zDb: *const ::os::raw::c_char,
 				ppSession: *mut *mut sqlite3_session,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3session_delete(pSession: *mut sqlite3_session);
+            
 			pub fn sqlite3session_enable(
 				pSession: *mut sqlite3_session,
 				bEnable: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3session_indirect(
 				pSession: *mut sqlite3_session,
 				bIndirect: ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3session_attach(
 				pSession: *mut sqlite3_session,
 				zTab: *const ::os::raw::c_char,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3session_table_filter(
 				pSession: *mut sqlite3_session,
 				xFilter: ::option::Option<
@@ -6145,29 +6381,36 @@ pub mod sqlite3
 				>,
 				pCtx: *mut ::os::raw::c_void,
 			);
+            
 			pub fn sqlite3session_changeset(
 				pSession: *mut sqlite3_session,
 				pnChangeset: *mut ::os::raw::c_int,
 				ppChangeset: *mut *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3session_diff(
 				pSession: *mut sqlite3_session,
 				zFromDb: *const ::os::raw::c_char,
 				zTbl: *const ::os::raw::c_char,
 				pzErrMsg: *mut *mut ::os::raw::c_char,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3session_patchset(
 				pSession: *mut sqlite3_session,
 				pnPatchset: *mut ::os::raw::c_int,
 				ppPatchset: *mut *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3session_isempty(pSession: *mut sqlite3_session) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_start(
 				pp: *mut *mut sqlite3_changeset_iter,
 				nChangeset: ::os::raw::c_int,
 				pChangeset: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_next(pIter: *mut sqlite3_changeset_iter) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_op(
 				pIter: *mut sqlite3_changeset_iter,
 				pzTab: *mut *const ::os::raw::c_char,
@@ -6175,37 +6418,45 @@ pub mod sqlite3
 				pOp: *mut ::os::raw::c_int,
 				pbIndirect: *mut ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_pk(
 				pIter: *mut sqlite3_changeset_iter,
 				pabPK: *mut *mut ::os::raw::c_uchar,
 				pnCol: *mut ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_old(
 				pIter: *mut sqlite3_changeset_iter,
 				iVal: ::os::raw::c_int,
 				ppValue: *mut *mut sqlite3_value,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_new(
 				pIter: *mut sqlite3_changeset_iter,
 				iVal: ::os::raw::c_int,
 				ppValue: *mut *mut sqlite3_value,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_conflict(
 				pIter: *mut sqlite3_changeset_iter,
 				iVal: ::os::raw::c_int,
 				ppValue: *mut *mut sqlite3_value,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_fk_conflicts(
 				pIter: *mut sqlite3_changeset_iter,
 				pnOut: *mut ::os::raw::c_int,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_finalize(pIter: *mut sqlite3_changeset_iter) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_invert(
 				nIn: ::os::raw::c_int,
 				pIn: *const ::os::raw::c_void,
 				pnOut: *mut ::os::raw::c_int,
 				ppOut: *mut *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_concat(
 				nA: ::os::raw::c_int,
 				pA: *mut ::os::raw::c_void,
@@ -6214,18 +6465,23 @@ pub mod sqlite3
 				pnOut: *mut ::os::raw::c_int,
 				ppOut: *mut *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changegroup_new(pp: *mut *mut sqlite3_changegroup) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changegroup_add(
 				arg1: *mut sqlite3_changegroup,
 				nData: ::os::raw::c_int,
 				pData: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changegroup_output(
 				arg1: *mut sqlite3_changegroup,
 				pnData: *mut ::os::raw::c_int,
 				ppData: *mut *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changegroup_delete(arg1: *mut sqlite3_changegroup);
+            
 			pub fn sqlite3changeset_apply(
 				db: *mut sqlite3,
 				nChangeset: ::os::raw::c_int,
@@ -6245,6 +6501,7 @@ pub mod sqlite3
 				>,
 				pCtx: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_apply_strm(
 				db: *mut sqlite3,
 				xInput: ::option::Option<
@@ -6270,6 +6527,7 @@ pub mod sqlite3
 				>,
 				pCtx: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_concat_strm(
 				xInputA: ::option::Option<
 					unsafe extern "C" fn
@@ -6296,6 +6554,7 @@ pub mod sqlite3
 				>,
 				pOut: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_invert_strm(
 				xInput: ::option::Option<
 					unsafe extern "C" fn
@@ -6314,6 +6573,7 @@ pub mod sqlite3
 				>,
 				pOut: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changeset_start_strm(
 				pp: *mut *mut sqlite3_changeset_iter,
 				xInput: ::option::Option<
@@ -6325,6 +6585,7 @@ pub mod sqlite3
 				>,
 				pIn: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3session_changeset_strm(
 				pSession: *mut sqlite3_session,
 				xOutput: ::option::Option<
@@ -6336,6 +6597,7 @@ pub mod sqlite3
 				>,
 				pOut: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3session_patchset_strm
 			(
 				pSession: *mut sqlite3_session,
@@ -6348,6 +6610,7 @@ pub mod sqlite3
 				>,
 				pOut: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+            
 			pub fn sqlite3changegroup_add_strm
 			(
 				arg1: *mut sqlite3_changegroup,
@@ -6360,6 +6623,7 @@ pub mod sqlite3
 				>,
 				pIn: *mut ::os::raw::c_void,
 			) -> ::os::raw::c_int;
+
 			pub fn sqlite3changegroup_output_strm
 			(
 				arg1: *mut sqlite3_changegroup,
@@ -6378,6 +6642,8 @@ pub mod sqlite3
                 db: *mut sqlite3,
                 N: ::os::raw::c_int,
             ) -> *const ::os::raw::c_char;
+            
+            pub fn sqlite3_is_interrupted(arg1: *mut sqlite3) -> ::os::raw::c_int;
 		}
 		
 		#[repr(C)] #[derive(Debug, Copy, Clone)]
@@ -7947,6 +8213,7 @@ pub mod sqlite3
         use ::
         {
             cell::{ RefCell },
+            hash::{ LruCache },
             ops::{ Deref, DerefMut },
             sqlite3::
             {
@@ -8078,7 +8345,7 @@ pub mod sqlite3
         use ::
         {
             ffi::{c_char, CStr},
-            sqlite3::{ Connection, Error, Name, Result, Statement },
+            sqlite3::{ * },
             *,
         };
         /*
@@ -8173,6 +8440,7 @@ pub mod sqlite3
 				let mut auto_inc = 0;
 
 				self.decode_result(unsafe {
+
 					sqlite3_table_column_metadata(
 						self.handle(),
 						db_name,
@@ -8585,7 +8853,7 @@ pub mod sqlite3
 
 			pub fn cache_flush(&mut self) -> Result<()>
             {
-				::error::check(unsafe { sqlite3_db_cacheflush(self.db()) })
+                check(unsafe { sqlite3_db_cacheflush(self.db()) })
 			}
             
 			#[inline] fn remove_hooks(&mut self) {}
@@ -9417,10 +9685,13 @@ pub mod sqlite3
 			}
 		}
 
-		macro_rules! tuple_try_from_row {
-			($($field:ident),*) => {
-				impl<'a, $($field,)*> convert::TryFrom<&'a Row<'a>> for ($($field,)*) where $($field: FromSql,)* {
-					type Error = crate::Error;
+		macro_rules! tuple_try_from_row
+        {
+			($($field:ident),*) =>
+            {
+				impl<'a, $($field,)*> convert::TryFrom<&'a Row<'a>> for ($($field,)*) where $($field: FromSql,)*
+                {
+					type Error = Error;
                     
 					#[allow(unused_assignments, unused_variables, unused_mut)]
 					fn try_from(row: &'a Row<'a>) -> Result<Self> {
@@ -10044,7 +10315,7 @@ pub mod sqlite3
         use ::
         {
             ops::{ Deref },
-            sqlite3::{ Connection, Result },
+            sqlite3::{ * },
             *,
         };
         /*
@@ -10300,29 +10571,36 @@ pub mod sqlite3
 				Transaction::new(self, self.transaction_behavior)
 			}
 			/// Begin a new transaction with a specified behavior.
-			#[inline] pub fn transaction_with_behavior(
+			#[inline] pub fn transaction_with_behavior
+            (
 				&mut self,
 				behavior: TransactionBehavior,
-			) -> Result<Transaction<'_>> {
+			) -> Result<Transaction<'_>>
+            {
 				Transaction::new(self, behavior)
 			}
 			/// Begin a new transaction with the default behavior (DEFERRED).
-			pub fn unchecked_transaction(&self) -> Result<Transaction<'_>> {
+			pub fn unchecked_transaction(&self) -> Result<Transaction<'_>>
+            {
 				Transaction::new_unchecked(self, self.transaction_behavior)
 			}
 			/// Begin a new savepoint with the default behavior (DEFERRED).
-			#[inline] pub fn savepoint(&mut self) -> Result<Savepoint<'_>> {
+			#[inline] pub fn savepoint(&mut self) -> Result<Savepoint<'_>>
+            {
 				Savepoint::new(self)
 			}
 			/// Begin a new savepoint with a specified name.
-			#[inline] pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
+			#[inline] pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>>
+            {
 				Savepoint::with_name(self, name)
 			}
 			/// Determine the transaction state of a database
-			pub fn transaction_state<N: crate::Name>(
+			pub fn transaction_state<N: Name>
+            (
 				&self,
 				db_name: Option<N>,
-			) -> Result<TransactionState> {
+			) -> Result<TransactionState>
+            {
 				self.db.borrow().txn_state(db_name)
 			}
 			/// Set the default transaction behavior for the connection.
@@ -10639,10 +10917,11 @@ pub mod sqlite3
 			*/
 			use ::
 			{
+                borrow::{ Cow },
+                sqlite3::{ * },
 				*,
-			};
+			}; use super::{ Null, Value, ValueRef };
 			/*
-			use super::{Null, Value, ValueRef};
 			#[cfg(feature = "array")]
 			use crate::vtab::array::Array;
 			use crate::{Error, Result};
@@ -10650,9 +10929,9 @@ pub mod sqlite3
 			*/
 			/// `ToSqlOutput` represents the possible output types for implementers of the
 			/// [`ToSql`] trait.
-			#[derive(Clone, Debug, PartialEq)]
-			#[non_exhaustive]
-			pub enum ToSqlOutput<'a> {
+			#[non_exhaustive] #[derive(Clone, Debug, PartialEq)]
+            pub enum ToSqlOutput<'a>
+            {
 				/// A borrowed SQLite-representable value.
 				Borrowed(ValueRef<'a>),
 
@@ -10940,9 +11219,8 @@ pub mod sqlite3
 			use ::
 			{
 				*,
-			};
+			}; use super::{Null, Type};
 			/*
-			use super::{Null, Type};
 			*/
 			/// Owning [dynamic type value](http://sqlite.org/datatype3.html).
 			#[derive(Clone, Debug, PartialEq)]
@@ -10977,23 +11255,8 @@ pub mod sqlite3
 				}
 			}
 
-			#[cfg(feature = "i128_blob")]
-			impl From<i128> for Value {
-				#[inline] fn from(i: i128) -> Self {
-					// We store these biased (e.g. with the most significant bit flipped)
-					// so that comparisons with negative numbers work properly.
-					Self::Blob(i128::to_be_bytes(i ^ (1_i128 << 127)).to_vec())
-				}
-			}
-
-			#[cfg(feature = "uuid")]
-			impl From<uuid::Uuid> for Value {
-				#[inline] fn from(id: uuid::Uuid) -> Self {
-					Self::Blob(id.as_bytes().to_vec())
-				}
-			}
-
-			macro_rules! from_i64(
+			macro_rules! from_i64
+            (
 				($t:ty) => (
 					impl From<$t> for Value {
 						#[inline]
@@ -11076,11 +11339,10 @@ pub mod sqlite3
 			*/
 			use ::
 			{
+                sqlite3::types::{FromSqlError, FromSqlResult},
 				*,
-			};
+			}; use super::{Type, Value};
 			/*
-			use super::{Type, Value};
-			use crate::types::{FromSqlError, FromSqlResult};
 			*/
 			/// A non-owning [dynamic type value](http://sqlite.org/datatype3.html).
 			#[derive(Copy, Clone, Debug, PartialEq)]
@@ -11440,6 +11702,7 @@ pub mod sqlite3
 			use ::
 			{
                 ffi::{ CStr, CString, NulError },
+                vec::{ * },
 				*,
 			};
 			/*
@@ -13428,4 +13691,4 @@ pub mod vec
         #[inline] fn to_smallvec(&self) -> SmallVec<A> { SmallVec::from_slice(self) }
     }
 }
-// 12145 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// 13694 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
