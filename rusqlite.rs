@@ -12,6 +12,7 @@
 )]
 
 extern crate hashbrown;
+extern crate smallvec;
 /*
 
 pub mod _
@@ -1160,17 +1161,17 @@ pub mod __
     {
         (@one $x:expr) => (1usize);
         ($elem:expr; $n:expr) => 
-        ({ ::vec::SmallVec::from_elem($elem, $n) });
+        ({ smallvec::SmallVec::from_elem($elem, $n) });
 
         ($($x:expr),*$(,)*) => 
         ({
             let count = 0usize $(+ smallvec!(@one $x))*;
-            let mut vec = ::vec::SmallVec::new();
+            let mut vec = smallvec::SmallVec::new();
             if count <= vec.inline_size() {
                 $(vec.push($x);)*
                 vec
             }
-            else { ::vec::SmallVec::from_vec( vec![$($x,)*] ) }
+            else { smallvec::SmallVec::from_vec( vec![$($x,)*] ) }
         });
     }
     /// `panic!()` in debug builds, optimization hint in release.
@@ -4157,10 +4158,24 @@ pub mod hash
     use::
     {
         borrow::{ Borrow },
+        cmp::{*},
+        iter::{ * },
         mem::{ self, MaybeUninit },
+        ops::{*},
         ptr::{ self, NonNull },
         *,
     };
+
+    pub mod table
+    {
+        /*!
+        */
+        use ::
+        {
+            *,
+        };
+        pub use hashbrown::hash_table::{ * };
+    }
     /*
         use core::{
         borrow::Borrow,
@@ -4197,7 +4212,7 @@ pub mod hash
         links: Links<K, V>,
     }
     
-    #[derive( Clone, Copy )]
+    //#[derive( Clone, Copy )]
     struct ValueLinks<K, V>
     {
         next: NonNull<Node<K, V>>,
@@ -4221,6 +4236,2107 @@ pub mod hash
         values: Option<NonNull<Node<K, V>>>,
         free: Option<NonNull<Node<K, V>>>,
         builder:Option<S>,
+    } 
+
+    impl<K, V> LinkedHashMap<K, V>
+    {
+        #[inline] pub fn new() -> Self {
+            Self {
+                table: self::table::HashTable::new(),
+                values: None,
+                free: None,
+                builder:None,
+            }
+        }
+
+        #[inline] pub fn with_capacity(capacity: usize) -> Self {
+            Self {
+                table: self::table::HashTable::with_capacity(capacity),
+                values: None,
+                free: None,
+                builder:None,
+            }
+        }
+    }
+
+    impl<K, V, S:Copy> LinkedHashMap<K, V, S> where
+    S:Copy,
+    {
+        #[inline] pub fn with_hasher(hash_builder: S) -> Self {
+            Self {
+                table: self::table::HashTable::new(),
+                values: None,
+                free: None,
+                builder:Some(hash_builder),
+            }
+        }
+
+        #[inline] pub fn with_capacity_and_hasher(capacity: usize, hash_builder: S) -> Self {
+            Self {
+                table: self::table::HashTable::with_capacity(capacity),
+                values: None,
+                free: None,
+                builder:Some(hash_builder),
+            }
+        }
+
+        #[inline] pub fn len(&self) -> usize {
+            self.table.len()
+        }
+
+        #[inline] pub fn is_empty(&self) -> bool {
+            self.len() == 0
+        }
+
+        #[inline] pub fn clear(&mut self) {
+            self.table.clear();
+            if let Some(mut values) = self.values {
+                unsafe {
+                    drop_value_nodes(values);
+                    values.as_mut().links.value = ValueLinks {
+                        prev: values,
+                        next: values,
+                    };
+                }
+            }
+        }
+        /*
+        #[inline] pub fn iter(&self) -> Iter<K, V> {
+            let (head, tail) = if let Some(values) = self.values {
+                unsafe {
+                    let ValueLinks { next, prev } = values.as_ref().links.value;
+                    (next.as_ptr(), prev.as_ptr())
+                }
+            } else {
+                (ptr::null_mut(), ptr::null_mut())
+            };
+
+            Iter {
+                head,
+                tail,
+                remaining: self.len(),
+                marker: ::marker::PhantomData,
+            }
+        } */
+
+        #[inline] pub fn iter_mut(&mut self) -> IterMut<K, V> {
+            let (head, tail) = if let Some(values) = self.values {
+                unsafe {
+                    let ValueLinks { next, prev } = values.as_ref().links.value;
+                    (Some(next), Some(prev))
+                }
+            } else {
+                (None, None)
+            };
+
+            IterMut {
+                head,
+                tail,
+                remaining: self.len(),
+                marker: ::marker::PhantomData,
+            }
+        }
+
+        #[inline] pub fn drain(&mut self) -> Drain<'_, K, V> {
+            unsafe {
+                let (head, tail) = if let Some(mut values) = self.values {
+                    let ValueLinks { next, prev } = values.as_ref().links.value;
+                    values.as_mut().links.value = ValueLinks {
+                        next: values,
+                        prev: values,
+                    };
+                    (Some(next), Some(prev))
+                } else {
+                    (None, None)
+                };
+                let len = self.len();
+
+                self.table.clear();
+
+                Drain {
+                    free: (&mut self.free).into(),
+                    head,
+                    tail,
+                    remaining: len,
+                    marker: ::marker::PhantomData,
+                }
+            }
+        }
+        /*
+        #[inline] pub fn keys(&self) -> Keys<K, V> {
+            Keys { inner: self.iter() }
+        }
+
+        #[inline] pub fn values(&self) -> Values<K, V> {
+            Values { inner: self.iter() }
+        } */
+
+        #[inline] pub fn values_mut(&mut self) -> ValuesMut<K, V> {
+            ValuesMut {
+                inner: self.iter_mut(),
+            }
+        }
+
+        #[inline] pub fn front(&self) -> Option<(&K, &V)>
+        {
+            if self.is_empty() {
+                return None;
+            }
+            unsafe {
+                let front = (*self.values.as_ptr()).links.value.next.as_ptr();
+                let (key, value) = (*front).entry_ref();
+                Some((key, value))
+            }
+        }
+
+        #[inline] pub fn back(&self) -> Option<(&K, &V)>
+        {
+            if self.is_empty() {
+                return None;
+            }
+            unsafe {
+                let back = &*(*self.values.as_ptr()).links.value.prev.as_ptr();
+                let (key, value) = (*back).entry_ref();
+                Some((key, value))
+            }
+        }
+
+        #[inline] pub fn retain<F>(&mut self, mut f: F)
+        where
+            F: FnMut(&K, &mut V) -> bool,
+        {
+            let free = self.free;
+            let mut drop_filtered_values = DropFilteredValues {
+                free: &mut self.free,
+                cur_free: free,
+            };
+
+            self.table.retain(|&mut node| unsafe {
+                let (k, v) = (*node.as_ptr()).entry_mut();
+                if f(k, v) {
+                    true
+                } else {
+                    drop_filtered_values.drop_later(node);
+                    false
+                }
+            });
+        }
+        /*
+        #[inline] pub fn hasher(&self) -> &S {
+            let b = &self.builder.unwrap();
+            b
+        } */
+
+        #[inline] pub fn capacity(&self) -> usize {
+            self.table.capacity()
+        }
+    }
+
+    impl<K, V, S> LinkedHashMap<K, V, S> where
+    K: Eq + Hash,
+    S: BuildHasher + Copy,
+    {
+        /*
+        #[inline] pub fn entry(&mut self, key: K) -> Entry<'_, K, V, S> {
+            match self.raw_entry_mut().from_key(&key) {
+                RawEntryMut::Occupied(occupied) => Entry::Occupied(OccupiedEntry {
+                    key,
+                    raw_entry: occupied,
+                }),
+                RawEntryMut::Vacant(vacant) => Entry::Vacant(VacantEntry {
+                    key,
+                    raw_entry: vacant,
+                }),
+            }
+        } */
+
+        #[inline] pub fn get<Q>(&self, k: &Q) -> Option<&V>
+        where
+            K: Borrow<Q>,
+            Q: Hash + Eq + ?Sized,
+        {
+            self.raw_entry().from_key(k).map(|(_, v)| v)
+        }
+
+        #[inline] pub fn get_key_value<Q>(&self, k: &Q) -> Option<(&K, &V)>
+        where
+            K: Borrow<Q>,
+            Q: Hash + Eq + ?Sized,
+        {
+            self.raw_entry().from_key(k)
+        }
+
+        #[inline] pub fn contains_key<Q>(&self, k: &Q) -> bool
+        where
+            K: Borrow<Q>,
+            Q: Hash + Eq + ?Sized,
+        {
+            self.get(k).is_some()
+        }
+
+        /*
+        #[inline] pub fn get_mut<Q>(&mut self, k: &Q) -> Option<&mut V>
+        where
+            K: Borrow<Q>,
+            Q: Hash + Eq + ?Sized,
+        {
+            match self.raw_entry_mut().from_key(k) {
+                RawEntryMut::Occupied(occupied) => Some(occupied.into_mut()),
+                RawEntryMut::Vacant(_) => None,
+            }
+        }
+        /// Inserts the given key / value pair at the *back* of the internal linked list.
+        #[inline] pub fn insert(&mut self, k: K, v: V) -> Option<V> {
+            match self.raw_entry_mut().from_key(&k) {
+                RawEntryMut::Occupied(mut occupied) => {
+                    occupied.to_back();
+                    Some(occupied.replace_value(v))
+                }
+                RawEntryMut::Vacant(vacant) => {
+                    vacant.insert(k, v);
+                    None
+                }
+            }
+        }
+        /// If the given key is not in this map, inserts the key / value pair at the *back* of the
+        /// internal linked list and returns `None`, otherwise, replaces the existing value with the
+        /// given value *without* moving the entry in the internal linked list and returns the previous
+        /// value.
+        #[inline] pub fn replace(&mut self, k: K, v: V) -> Option<V> {
+            match self.raw_entry_mut().from_key(&k) {
+                RawEntryMut::Occupied(mut occupied) => Some(occupied.replace_value(v)),
+                RawEntryMut::Vacant(vacant) => {
+                    vacant.insert(k, v);
+                    None
+                }
+            }
+        }
+
+        #[inline] pub fn remove<Q>(&mut self, k: &Q) -> Option<V>
+        where
+            K: Borrow<Q>,
+            Q: Hash + Eq + ?Sized,
+        {
+            match self.raw_entry_mut().from_key(k) {
+                RawEntryMut::Occupied(occupied) => Some(occupied.remove()),
+                RawEntryMut::Vacant(_) => None,
+            }
+        }
+
+        #[inline] pub fn remove_entry<Q>(&mut self, k: &Q) -> Option<(K, V)>
+        where
+            K: Borrow<Q>,
+            Q: Hash + Eq + ?Sized,
+        {
+            match self.raw_entry_mut().from_key(k) {
+                RawEntryMut::Occupied(occupied) => Some(occupied.remove_entry()),
+                RawEntryMut::Vacant(_) => None,
+            }
+        }
+
+        #[inline] pub fn pop_front(&mut self) -> Option<(K, V)>
+        {
+            if self.is_empty() {
+                return None;
+            }
+            unsafe {
+                let front = (*self.values.as_ptr()).links.value.next;
+                let hash = hash_node(&self.builder.unwrap(), front);
+                match self
+                    .raw_entry_mut()
+                    .from_hash(hash, |k| k.eq(front.as_ref().key_ref()))
+                {
+                    RawEntryMut::Occupied(occupied) => Some(occupied.remove_entry()),
+                    RawEntryMut::Vacant(_) => None,
+                }
+            }
+        }
+
+        #[inline] pub fn pop_back(&mut self) -> Option<(K, V)>
+        {
+            if self.is_empty() {
+                return None;
+            }
+            unsafe {
+                let back = (*self.values.as_ptr()).links.value.prev;
+                let hash = hash_node(&self.builder.unwrap(), back);
+                match self
+                    .raw_entry_mut()
+                    .from_hash(hash, |k| k.eq(back.as_ref().key_ref()))
+                {
+                    RawEntryMut::Occupied(occupied) => Some(occupied.remove_entry()),
+                    RawEntryMut::Vacant(_) => None,
+                }
+            }
+        }
+        /// If an entry with this key exists, move it to the front of the list and return a reference to
+        /// the value.
+        #[inline] pub fn to_front<Q>(&mut self, k: &Q) -> Option<&mut V>
+        where
+            K: Borrow<Q>,
+            Q: Hash + Eq + ?Sized,
+        {
+            match self.raw_entry_mut().from_key(k) {
+                RawEntryMut::Occupied(mut occupied) => {
+                    occupied.to_front();
+                    Some(occupied.into_mut())
+                }
+                RawEntryMut::Vacant(_) => None,
+            }
+        }
+        /// If an entry with this key exists, move it to the back of the list and return a reference to
+        /// the value.
+        #[inline] pub fn to_back<Q>(&mut self, k: &Q) -> Option<&mut V>
+        where
+            K: Borrow<Q>,
+            Q: Hash + Eq + ?Sized,
+        {
+            match self.raw_entry_mut().from_key(k) {
+                RawEntryMut::Occupied(mut occupied) => {
+                    occupied.to_back();
+                    Some(occupied.into_mut())
+                }
+                RawEntryMut::Vacant(_) => None,
+            }
+        } */
+
+        #[inline] pub fn reserve(&mut self, additional: usize) {
+            let hash_builder = &self.builder.unwrap();
+            self.table
+                .reserve(additional, move |&n| unsafe { hash_node(hash_builder, n) });
+        }
+
+        #[inline] pub fn try_reserve(&mut self, additional: usize) -> Result<(), hashbrown::TryReserveError> {
+            let hash_builder = &self.builder.unwrap();
+            self.table
+                .try_reserve(additional, move |&n| unsafe { hash_node(hash_builder, n) })
+                .map_err(|e| match e {
+                    hashbrown::TryReserveError::CapacityOverflow => hashbrown::TryReserveError::CapacityOverflow,
+                    hashbrown::TryReserveError::AllocError { layout } => {
+                       hashbrown::TryReserveError::AllocError { layout }
+                    }
+                })
+        }
+
+        #[inline] pub fn shrink_to_fit(&mut self) {
+            let hash_builder = &self.builder.unwrap();
+            unsafe {
+                self.table
+                    .shrink_to_fit(move |&n| hash_node(hash_builder, n));
+                drop_free_nodes(self.free.take());
+            }
+        }
+
+        pub fn retain_with_order<F>(&mut self, mut f: F)
+        where
+            F: FnMut(&K, &mut V) -> bool,
+        {
+            let free = self.free;
+            let mut drop_filtered_values = DropFilteredValues {
+                free: &mut self.free,
+                cur_free: free,
+            };
+
+            if let Some(values) = self.values {
+                unsafe {
+                    let mut cur = values.as_ref().links.value.next;
+                    while cur != values {
+                        let next = cur.as_ref().links.value.next;
+                        let filter = {
+                            let (k, v) = (*cur.as_ptr()).entry_mut();
+                            !f(k, v)
+                        };
+                        if filter {
+                            let k = (*cur.as_ptr()).key_ref();
+                            let hash = hash_key(&self.builder.unwrap(), k);
+                            self.table
+                                .find_entry(hash, |o| (*o).as_ref().key_ref().eq(k))
+                                .unwrap()
+                                .remove();
+                            drop_filtered_values.drop_later(cur);
+                        }
+                        cur = next;
+                    }
+                }
+            }
+        }
+        /*
+        // Returns the `CursorMut` over the _guard_ node.
+        fn cursor_mut(&mut self) -> CursorMut<K, V, S> {
+            unsafe { ensure_guard_node(&mut self.values) };
+            CursorMut {
+                cur: self.values.as_ptr(),
+                hash_builder: &self.builder.unwrap().clone(),
+                free: &mut self.free,
+                values: &mut self.values,
+                table: &mut self.table,
+            }
+        }
+        /// Returns the `CursorMut` over the front node.
+        pub fn cursor_front_mut(&mut self) -> CursorMut<K, V, S> {
+            let mut c = self.cursor_mut();
+            c.move_next();
+            c
+        }
+        /// Returns the `CursorMut` over the back node.
+        pub fn cursor_back_mut(&mut self) -> CursorMut<K, V, S> {
+            let mut c = self.cursor_mut();
+            c.move_prev();
+            c
+        }*/
+    }
+
+    impl<K, V, S> LinkedHashMap<K, V, S> where
+    S: BuildHasher + Copy,
+    {
+        #[inline] pub fn raw_entry(&self) -> RawEntryBuilder<'_, K, V, S> {
+            RawEntryBuilder { map: self }
+        }
+
+        #[inline] pub fn raw_entry_mut(&mut self) -> RawEntryBuilderMut<'_, K, V, S> {
+            RawEntryBuilderMut { map: self }
+        }
+    }
+
+    impl<K, V, S> Default for LinkedHashMap<K, V, S> where
+    S: Default + Copy,
+    {
+        #[inline] fn default() -> Self {
+            Self::with_hasher(S::default())
+        }
+    }
+    /*
+    impl<K: Hash + Eq, V, S: BuildHasher + Default + Copy> FromIterator<(K, V)> for LinkedHashMap<K, V, S>
+    {
+        #[inline] fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
+            let iter = iter.into_iter();
+            let mut map = Self::with_capacity_and_hasher(iter.size_hint().0, S::default());
+            map.extend(iter);
+            map
+        }
+    } */
+
+    impl<K, V, S> fmt::Debug for LinkedHashMap<K, V, S> where
+        K: fmt::Debug,
+        V: fmt::Debug,
+        S:Copy,
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.debug_map().entries(self).finish()
+        }
+    }
+    /*
+
+    impl<K: Hash + Eq, V: PartialEq, S: BuildHasher + Copy> PartialEq for LinkedHashMap<K, V, S> {
+        #[inline] fn eq(&self, other: &Self) -> bool {
+            self.len() == other.len() && self.iter().eq(other)
+        }
+    }
+
+    impl<K: Hash + Eq, V: Eq, S: BuildHasher + Copy> Eq for LinkedHashMap<K, V, S> {}
+
+    impl<K: Hash + Eq + PartialOrd, V: PartialOrd, S: BuildHasher+Copy> PartialOrd for LinkedHashMap<K, V, S>
+    {
+        #[inline] fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            self.iter().partial_cmp(other)
+        }
+
+        #[inline] fn lt(&self, other: &Self) -> bool {
+            self.iter().lt(other)
+        }
+
+        #[inline] fn le(&self, other: &Self) -> bool {
+            self.iter().le(other)
+        }
+
+        #[inline] fn ge(&self, other: &Self) -> bool {
+            self.iter().ge(other)
+        }
+
+        #[inline] fn gt(&self, other: &Self) -> bool {
+            self.iter().gt(other)
+        }
+    }
+
+    impl<K: Hash + Eq + Ord, V: Ord, S: BuildHasher> Ord for LinkedHashMap<K, V, S> where
+    S:Copy,
+    {
+        #[inline] fn cmp(&self, other: &Self) -> Ordering {
+            self.iter().cmp(other)
+        }
+    }
+
+    impl<K: Hash + Eq, V: Hash, S: BuildHasher> Hash for LinkedHashMap<K, V, S> where
+    S:Copy,
+    {
+        #[inline] fn hash<H: Hasher>(&self, h: &mut H) {
+            for e in self.iter() {
+                e.hash(h);
+            }
+        }
+    }*/
+
+    impl<K, V, S> Drop for LinkedHashMap<K, V, S> where
+    S:Copy,
+    {
+        #[inline] fn drop(&mut self) {
+            unsafe {
+                if let Some(values) = self.values {
+                    drop_value_nodes(values);
+                    let _ = Box::from_raw(values.as_ptr());
+                }
+                drop_free_nodes(self.free);
+            }
+        }
+    }
+
+    unsafe impl<K: Send, V: Send, S: Send> Send for LinkedHashMap<K, V, S> where S:Copy, {}
+    unsafe impl<K: Sync, V: Sync, S: Sync> Sync for LinkedHashMap<K, V, S> where S:Copy, {}
+
+    impl<'a, K, V, S, Q> Index<&'a Q> for LinkedHashMap<K, V, S>
+    where
+        K: Hash + Eq + Borrow<Q>,
+        S: BuildHasher + Copy,
+        Q: Eq + Hash + ?Sized,
+    {
+        type Output = V;
+
+        #[inline] fn index(&self, index: &'a Q) -> &V {
+            self.get(index).expect("no entry found for key")
+        }
+    }
+    /*
+    impl<'a, K, V, S, Q> IndexMut<&'a Q> for LinkedHashMap<K, V, S>
+    where
+        K: Hash + Eq + Borrow<Q>,
+        S: BuildHasher + Copy,
+        Q: Eq + Hash + ?Sized,
+    {
+        #[inline] fn index_mut(&mut self, index: &'a Q) -> &mut V {
+            self.get_mut(index).expect("no entry found for key")
+        }
+    } */
+
+
+
+
+    /*
+
+    impl<K: Hash + Eq + Clone, V: Clone, S: BuildHasher + Clone> Clone for LinkedHashMap<K, V, S> where
+    S:Copy,
+    {
+        #[inline] fn clone(&self) -> Self {
+            let mut map = Self::with_hasher(self.builder.unwrap().clone());
+            map.extend(self.iter().map(|(k, v)| (k.clone(), v.clone())));
+            map
+        }
+    }
+
+    impl<K: Hash + Eq, V, S: BuildHasher> Extend<(K, V)> for LinkedHashMap<K, V, S> where
+    S:Copy,
+    {
+        #[inline] fn extend<I: IntoIterator<Item = (K, V)>>(&mut self, iter: I) {
+            for (k, v) in iter {
+                self.insert(k, v);
+            }
+        }
+    }
+
+    impl<'a, K, V, S> Extend<(&'a K, &'a V)> for LinkedHashMap<K, V, S>
+    where
+        K: 'a + Hash + Eq + Copy,
+        V: 'a + Copy,
+        S: BuildHasher + Copy,
+    {
+        #[inline] fn extend<I: IntoIterator<Item = (&'a K, &'a V)>>(&mut self, iter: I) {
+            for (&k, &v) in iter {
+                self.insert(k, v);
+            }
+        }
+    } */
+
+    pub enum Entry<'a, K, V, S> {
+        Occupied(OccupiedEntry<'a, K, V, S>),
+        Vacant(VacantEntry<'a, K, V, S>),
+    }
+
+    impl<K: fmt::Debug, V: fmt::Debug, S> fmt::Debug for Entry<'_, K, V, S> {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match *self {
+                Entry::Vacant(ref v) => f.debug_tuple("Entry").field(v).finish(),
+                Entry::Occupied(ref o) => f.debug_tuple("Entry").field(o).finish(),
+            }
+        }
+    }
+
+    impl<'a, K, V, S> Entry<'a, K, V, S> {
+        /// If this entry is vacant, inserts a new entry with the given value and returns a reference to it.
+        #[inline] pub fn or_insert(self, default: V) -> &'a mut V where
+            K: Hash,
+            S: BuildHasher,
+        {
+            match self {
+                Entry::Occupied(mut entry) => {
+                    entry.to_back();
+                    entry.into_mut()
+                }
+                Entry::Vacant(entry) => entry.insert(default),
+            }
+        }
+        /// Similar to `Entry::or_insert`, but accepts a function to construct a new value if this entry
+        /// is vacant.
+        #[inline] pub fn or_insert_with<F: FnOnce() -> V>(self, default: F) -> &'a mut V
+        where
+            K: Hash,
+            S: BuildHasher,
+        {
+            match self {
+                Entry::Occupied(mut entry) => {
+                    entry.to_back();
+                    entry.into_mut()
+                }
+                Entry::Vacant(entry) => entry.insert(default()),
+            }
+        }
+
+        #[inline] pub fn key(&self) -> &K {
+            match *self {
+                Entry::Occupied(ref entry) => entry.key(),
+                Entry::Vacant(ref entry) => entry.key(),
+            }
+        }
+
+        #[inline] pub fn and_modify<F>(self, f: F) -> Self
+        where
+            F: FnOnce(&mut V),
+        {
+            match self {
+                Entry::Occupied(mut entry) => {
+                    f(entry.get_mut());
+                    Entry::Occupied(entry)
+                }
+                Entry::Vacant(entry) => Entry::Vacant(entry),
+            }
+        }
+    }
+
+    pub struct OccupiedEntry<'a, K, V, S> {
+        key: K,
+        raw_entry: RawOccupiedEntryMut<'a, K, V, S>,
+    }
+
+    impl<K: fmt::Debug, V: fmt::Debug, S> fmt::Debug for OccupiedEntry<'_, K, V, S> {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("OccupiedEntry")
+                .field("key", self.key())
+                .field("value", self.get())
+                .finish()
+        }
+    }
+
+    impl<'a, K, V, S> OccupiedEntry<'a, K, V, S> {
+        #[inline] pub fn key(&self) -> &K {
+            self.raw_entry.key()
+        }
+
+        #[inline] pub fn remove_entry(self) -> (K, V) {
+            self.raw_entry.remove_entry()
+        }
+
+        #[inline] pub fn get(&self) -> &V {
+            self.raw_entry.get()
+        }
+
+        #[inline] pub fn get_mut(&mut self) -> &mut V {
+            self.raw_entry.get_mut()
+        }
+
+        #[inline] pub fn into_mut(self) -> &'a mut V {
+            self.raw_entry.into_mut()
+        }
+
+        #[inline] pub fn to_back(&mut self) {
+            self.raw_entry.to_back()
+        }
+
+        #[inline] pub fn to_front(&mut self) {
+            self.raw_entry.to_front()
+        }
+        /// Replaces this entry's value with the provided value.
+        ///
+        /// Similarly to `LinkedHashMap::insert`, this moves the existing entry to the back of the
+        /// internal linked list.
+        #[inline] pub fn insert(&mut self, value: V) -> V {
+            self.raw_entry.to_back();
+            self.raw_entry.replace_value(value)
+        }
+
+        #[inline] pub fn remove(self) -> V {
+            self.raw_entry.remove()
+        }
+        /// Similar to `OccupiedEntry::replace_entry`, but *does* move the entry to the back of the
+        /// internal linked list.
+        #[inline] pub fn insert_entry(mut self, value: V) -> (K, V) {
+            self.raw_entry.to_back();
+            self.replace_entry(value)
+        }
+        /// Returns a `CursorMut` over the current entry.
+        #[inline] pub fn cursor_mut(self) -> CursorMut<'a, K, V, S>
+        where
+            K: Eq + Hash,
+            S: BuildHasher,
+        {
+            self.raw_entry.cursor_mut()
+        }
+        /// Replaces the entry's key with the key provided to `LinkedHashMap::entry`, and replaces the
+        /// entry's value with the given `value` parameter.
+        ///
+        /// Does *not* move the entry to the back of the internal linked list.
+        pub fn replace_entry(mut self, value: V) -> (K, V) {
+            let old_key = mem::replace(self.raw_entry.key_mut(), self.key);
+            let old_value = mem::replace(self.raw_entry.get_mut(), value);
+            (old_key, old_value)
+        }
+        /// Replaces this entry's key with the key provided to `LinkedHashMap::entry`.
+        ///
+        /// Does *not* move the entry to the back of the internal linked list.
+        #[inline] pub fn replace_key(mut self) -> K {
+            mem::replace(self.raw_entry.key_mut(), self.key)
+        }
+    }
+
+    pub struct VacantEntry<'a, K, V, S> {
+        key: K,
+        raw_entry: RawVacantEntryMut<'a, K, V, S>,
+    }
+
+    impl<K: fmt::Debug, V, S> fmt::Debug for VacantEntry<'_, K, V, S> {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_tuple("VacantEntry").field(self.key()).finish()
+        }
+    }
+
+    impl<'a, K, V, S> VacantEntry<'a, K, V, S> {
+        #[inline] pub fn key(&self) -> &K {
+            &self.key
+        }
+
+        #[inline] pub fn into_key(self) -> K {
+            self.key
+        }
+        /// Insert's the key for this vacant entry paired with the given value as a new entry at the
+        /// *back* of the internal linked list.
+        #[inline] pub fn insert(self, value: V) -> &'a mut V
+        where
+            K: Hash,
+            S: BuildHasher,
+        {
+            self.raw_entry.insert(self.key, value).1
+        }
+    }
+
+    pub struct RawEntryBuilder<'a, K, V, S:Copy> {
+        map: &'a LinkedHashMap<K, V, S>,
+    }
+
+    impl<'a, K, V, S> RawEntryBuilder<'a, K, V, S>
+    where
+        S: BuildHasher+Copy,
+    {
+        #[inline] pub fn from_key<Q>(self, k: &Q) -> Option<(&'a K, &'a V)>
+        where
+            K: Borrow<Q>,
+            Q: Hash + Eq + ?Sized,
+        {
+            let hash = hash_key(&self.map.builder.unwrap(), k);
+            self.from_key_hashed_nocheck(hash, k)
+        }
+
+        #[inline] pub fn from_key_hashed_nocheck<Q>(self, hash: u64, k: &Q) -> Option<(&'a K, &'a V)>
+        where
+            K: Borrow<Q>,
+            Q: Hash + Eq + ?Sized,
+        {
+            self.from_hash(hash, move |o| k.eq(o.borrow()))
+        }
+
+        #[inline] pub fn from_hash(
+            self,
+            hash: u64,
+            mut is_match: impl FnMut(&K) -> bool,
+        ) -> Option<(&'a K, &'a V)> {
+            unsafe {
+                let node = self
+                    .map
+                    .table
+                    .find(hash, move |k| is_match((*k).as_ref().key_ref()))?;
+
+                let (key, value) = (*node.as_ptr()).entry_ref();
+                Some((key, value))
+            }
+        }
+    }
+
+    unsafe impl<K, V, S> Send for RawEntryBuilder<'_, K, V, S>
+    where
+        K: Send,
+        V: Send,
+        S: Send+Copy,
+    {
+    }
+
+    unsafe impl<K, V, S> Sync for RawEntryBuilder<'_, K, V, S>
+    where
+        K: Sync,
+        V: Sync,
+        S: Sync+Copy,
+    {
+    }
+
+    pub struct RawEntryBuilderMut<'a, K, V, S:Copy> {
+        map: &'a mut LinkedHashMap<K, V, S>,
+    }
+
+    impl<'a, K, V, S> RawEntryBuilderMut<'a, K, V, S>
+    where
+        S: BuildHasher+Copy,
+    {
+        
+        /*
+        #[inline] pub fn from_key<Q>(self, k: &Q) -> RawEntryMut<'a, K, V, S>
+        where
+            K: Borrow<Q>,
+            Q: Hash + Eq + ?Sized,
+        {
+            let hash = hash_key(&self.map.builder.unwrap(), k);
+            self.from_key_hashed_nocheck(hash, k)
+        }
+        #[inline] pub fn from_key_hashed_nocheck<Q>(self, hash: u64, k: &Q) -> RawEntryMut<'a, K, V, S>
+        where
+            K: Borrow<Q>,
+            Q: Hash + Eq + ?Sized,
+        {
+            self.from_hash(hash, move |o| k.eq(o.borrow()))
+        }
+        #[inline] pub fn from_hash(
+            self,
+            hash: u64,
+            mut is_match: impl FnMut(&K) -> bool,
+        ) -> RawEntryMut<'a, K, V, S> where
+        S:Copy,
+        {
+            let entry = self
+                .map
+                .table
+                .find_entry(hash, move |k| is_match(unsafe { (*k).as_ref().key_ref() }));
+
+            match entry {
+                Ok(occupied) => RawEntryMut::Occupied(RawOccupiedEntryMut {
+                    hash_builder: &self.map.builder.unwrap().clone(),
+                    free: &mut self.map.free,
+                    values: &mut self.map.values,
+                    entry: occupied,
+                }),
+                Err(absent) => RawEntryMut::Vacant(RawVacantEntryMut {
+                    hash_builder: &self.map.builder.unwrap().clone(),
+                    values: &mut self.map.values,
+                    free: &mut self.map.free,
+                    entry: absent,
+                }),
+            }
+        } */
+    }
+
+    unsafe impl<K, V, S> Send for RawEntryBuilderMut<'_, K, V, S>
+    where
+        K: Send,
+        V: Send,
+        S: Send+Copy,
+    {
+    }
+
+    unsafe impl<K, V, S> Sync for RawEntryBuilderMut<'_, K, V, S>
+    where
+        K: Sync,
+        V: Sync,
+        S: Sync+Copy,
+    {
+    }
+
+    pub enum RawEntryMut<'a, K, V, S> {
+        Occupied(RawOccupiedEntryMut<'a, K, V, S>),
+        Vacant(RawVacantEntryMut<'a, K, V, S>),
+    }
+
+    impl<'a, K, V, S> RawEntryMut<'a, K, V, S> {
+        /// Similarly to `Entry::or_insert`, if this entry is occupied, it will move the existing entry
+        /// to the back of the internal linked list.
+        #[inline] pub fn or_insert(self, default_key: K, default_val: V) -> (&'a mut K, &'a mut V)
+        where
+            K: Hash,
+            S: BuildHasher,
+        {
+            match self {
+                RawEntryMut::Occupied(mut entry) => {
+                    entry.to_back();
+                    entry.into_key_value()
+                }
+                RawEntryMut::Vacant(entry) => entry.insert(default_key, default_val),
+            }
+        }
+        /// Similarly to `Entry::or_insert_with`, if this entry is occupied, it will move the existing
+        /// entry to the back of the internal linked list.
+        #[inline] pub fn or_insert_with<F>(self, default: F) -> (&'a mut K, &'a mut V)
+        where
+            F: FnOnce() -> (K, V),
+            K: Hash,
+            S: BuildHasher,
+        {
+            match self {
+                RawEntryMut::Occupied(mut entry) => {
+                    entry.to_back();
+                    entry.into_key_value()
+                }
+                RawEntryMut::Vacant(entry) => {
+                    let (k, v) = default();
+                    entry.insert(k, v)
+                }
+            }
+        }
+
+        #[inline] pub fn and_modify<F>(self, f: F) -> Self
+        where
+            F: FnOnce(&mut K, &mut V),
+        {
+            match self {
+                RawEntryMut::Occupied(mut entry) => {
+                    {
+                        let (k, v) = entry.get_key_value_mut();
+                        f(k, v);
+                    }
+                    RawEntryMut::Occupied(entry)
+                }
+                RawEntryMut::Vacant(entry) => RawEntryMut::Vacant(entry),
+            }
+        }
+    }
+
+    pub struct RawOccupiedEntryMut<'a, K, V, S> {
+        hash_builder: &'a S,
+        free: &'a mut Option<NonNull<Node<K, V>>>,
+        values: &'a mut Option<NonNull<Node<K, V>>>,
+        entry: hashbrown::hash_table::OccupiedEntry<'a, NonNull<Node<K, V>>>,
+    }
+
+    impl<'a, K, V, S> RawOccupiedEntryMut<'a, K, V, S> {
+        #[inline] pub fn key(&self) -> &K {
+            self.get_key_value().0
+        }
+
+        #[inline] pub fn key_mut(&mut self) -> &mut K {
+            self.get_key_value_mut().0
+        }
+
+        #[inline] pub fn into_key(self) -> &'a mut K {
+            self.into_key_value().0
+        }
+
+        #[inline] pub fn get(&self) -> &V {
+            self.get_key_value().1
+        }
+
+        #[inline] pub fn get_mut(&mut self) -> &mut V {
+            self.get_key_value_mut().1
+        }
+
+        #[inline] pub fn into_mut(self) -> &'a mut V {
+            self.into_key_value().1
+        }
+
+        #[inline] pub fn get_key_value(&self) -> (&K, &V) {
+            unsafe {
+                let node = *self.entry.get();
+                let (key, value) = (*node.as_ptr()).entry_ref();
+                (key, value)
+            }
+        }
+
+        #[inline] pub fn get_key_value_mut(&mut self) -> (&mut K, &mut V) {
+            unsafe {
+                let node = *self.entry.get_mut();
+                let (key, value) = (*node.as_ptr()).entry_mut();
+                (key, value)
+            }
+        }
+
+        #[inline] pub fn into_key_value(self) -> (&'a mut K, &'a mut V) {
+            unsafe {
+                let node = *self.entry.into_mut();
+                let (key, value) = (*node.as_ptr()).entry_mut();
+                (key, value)
+            }
+        }
+
+        #[inline] pub fn to_back(&mut self) {
+            unsafe {
+                let node = *self.entry.get_mut();
+                detach_node(node);
+                attach_before(node, NonNull::new_unchecked(self.values.as_ptr()));
+            }
+        }
+
+        #[inline] pub fn to_front(&mut self) {
+            unsafe {
+                let node = *self.entry.get_mut();
+                detach_node(node);
+                attach_before(node, (*self.values.as_ptr()).links.value.next);
+            }
+        }
+
+        #[inline] pub fn replace_value(&mut self, value: V) -> V {
+            unsafe {
+                let mut node = *self.entry.get_mut();
+                mem::replace(&mut node.as_mut().entry_mut().1, value)
+            }
+        }
+
+        #[inline] pub fn replace_key(&mut self, key: K) -> K {
+            unsafe {
+                let mut node = *self.entry.get_mut();
+                mem::replace(&mut node.as_mut().entry_mut().0, key)
+            }
+        }
+
+        #[inline] pub fn remove(self) -> V {
+            self.remove_entry().1
+        }
+
+        #[inline] pub fn remove_entry(self) -> (K, V) {
+            let node = self.entry.remove().0;
+            unsafe { remove_node(self.free, node) }
+        }
+        /// Returns a `CursorMut` over the current entry.
+        #[inline] pub fn cursor_mut(self) -> CursorMut<'a, K, V, S>
+        where
+            K: Eq + Hash,
+            S: BuildHasher,
+        {
+            CursorMut {
+                cur: self.entry.get().as_ptr(),
+                hash_builder: self.hash_builder,
+                free: self.free,
+                values: self.values,
+                table: self.entry.into_table(),
+            }
+        }
+    }
+
+    pub struct RawVacantEntryMut<'a, K, V, S> {
+        hash_builder: &'a S,
+        values: &'a mut Option<NonNull<Node<K, V>>>,
+        free: &'a mut Option<NonNull<Node<K, V>>>,
+        entry: hashbrown::hash_table::AbsentEntry<'a, NonNull<Node<K, V>>>,
+    }
+
+    impl<'a, K, V, S> RawVacantEntryMut<'a, K, V, S> {
+        #[inline] pub fn insert(self, key: K, value: V) -> (&'a mut K, &'a mut V)
+        where
+            K: Hash,
+            S: BuildHasher,
+        {
+            let hash = hash_key(self.hash_builder, &key);
+            self.insert_hashed_nocheck(hash, key, value)
+        }
+
+        #[inline] pub fn insert_hashed_nocheck(self, hash: u64, key: K, value: V) -> (&'a mut K, &'a mut V)
+        where
+            K: Hash,
+            S: BuildHasher,
+        {
+            let hash_builder = self.hash_builder;
+            self.insert_with_hasher(hash, key, value, |k| hash_key(hash_builder, k))
+        }
+
+        #[inline] pub fn insert_with_hasher(
+            self,
+            hash: u64,
+            key: K,
+            value: V,
+            hasher: impl Fn(&K) -> u64,
+        ) -> (&'a mut K, &'a mut V)
+        where
+            S: BuildHasher,
+        {
+            unsafe {
+                ensure_guard_node(self.values);
+                let mut new_node = allocate_node(self.free);
+                new_node.as_mut().put_entry((key, value));
+                attach_before(new_node, NonNull::new_unchecked(self.values.as_ptr()));
+
+                let node = self
+                    .entry
+                    .into_table()
+                    .insert_unique(hash, new_node, move |k| hasher((*k).as_ref().key_ref()))
+                    .into_mut();
+
+                let (key, value) = (*node.as_ptr()).entry_mut();
+                (key, value)
+            }
+        }
+    }
+
+    impl<K, V, S> fmt::Debug for RawEntryBuilderMut<'_, K, V, S> where
+    S:Copy,
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("RawEntryBuilder").finish()
+        }
+    }
+
+    impl<K: fmt::Debug, V: fmt::Debug, S> fmt::Debug for RawEntryMut<'_, K, V, S> where
+    S:Copy,
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match *self {
+                RawEntryMut::Vacant(ref v) => f.debug_tuple("RawEntry").field(v).finish(),
+                RawEntryMut::Occupied(ref o) => f.debug_tuple("RawEntry").field(o).finish(),
+            }
+        }
+    }
+
+    impl<K: fmt::Debug, V: fmt::Debug, S> fmt::Debug for RawOccupiedEntryMut<'_, K, V, S> {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("RawOccupiedEntryMut")
+                .field("key", self.key())
+                .field("value", self.get())
+                .finish()
+        }
+    }
+
+    impl<K, V, S> fmt::Debug for RawVacantEntryMut<'_, K, V, S> {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("RawVacantEntryMut").finish()
+        }
+    }
+
+    impl<K, V, S> fmt::Debug for RawEntryBuilder<'_, K, V, S> where
+    S:Copy,
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("RawEntryBuilder").finish()
+        }
+    }
+
+    unsafe impl<K, V, S> Send for RawOccupiedEntryMut<'_, K, V, S>
+    where
+        K: Send,
+        V: Send,
+        S: Send,
+    {
+    }
+
+    unsafe impl<K, V, S> Sync for RawOccupiedEntryMut<'_, K, V, S>
+    where
+        K: Sync,
+        V: Sync,
+        S: Sync,
+    {
+    }
+
+    unsafe impl<K, V, S> Send for RawVacantEntryMut<'_, K, V, S>
+    where
+        K: Send,
+        V: Send,
+        S: Send,
+    {
+    }
+
+    unsafe impl<K, V, S> Sync for RawVacantEntryMut<'_, K, V, S>
+    where
+        K: Sync,
+        V: Sync,
+        S: Sync,
+    {
+    }
+
+    pub struct Iter<'a, K, V> {
+        head: *const Node<K, V>,
+        tail: *const Node<K, V>,
+        remaining: usize,
+        marker: ::marker::PhantomData<(&'a K, &'a V)>,
+    }
+
+    pub struct IterMut<'a, K, V> {
+        head: Option<NonNull<Node<K, V>>>,
+        tail: Option<NonNull<Node<K, V>>>,
+        remaining: usize,
+        marker: ::marker::PhantomData<(&'a K, &'a mut V)>,
+    }
+
+    pub struct IntoIter<K, V> {
+        head: Option<NonNull<Node<K, V>>>,
+        tail: Option<NonNull<Node<K, V>>>,
+        remaining: usize,
+        marker: ::marker::PhantomData<(K, V)>,
+    }
+
+    pub struct Drain<'a, K, V> {
+        free: NonNull<Option<NonNull<Node<K, V>>>>,
+        head: Option<NonNull<Node<K, V>>>,
+        tail: Option<NonNull<Node<K, V>>>,
+        remaining: usize,
+        marker: ::marker::PhantomData<(K, V, &'a LinkedHashMap<K, V>)>,
+    }
+
+    impl<K, V> IterMut<'_, K, V> {
+        #[inline] pub fn iter(&self) -> Iter<'_, K, V> {
+            Iter {
+                head: self.head.as_ptr(),
+                tail: self.tail.as_ptr(),
+                remaining: self.remaining,
+                marker: ::marker::PhantomData,
+            }
+        }
+    }
+
+    impl<K, V> IntoIter<K, V> {
+        #[inline] pub fn iter(&self) -> Iter<'_, K, V> {
+            Iter {
+                head: self.head.as_ptr(),
+                tail: self.tail.as_ptr(),
+                remaining: self.remaining,
+                marker: ::marker::PhantomData,
+            }
+        }
+    }
+
+    impl<K, V> Drain<'_, K, V> {
+        #[inline] pub fn iter(&self) -> Iter<'_, K, V> {
+            Iter {
+                head: self.head.as_ptr(),
+                tail: self.tail.as_ptr(),
+                remaining: self.remaining,
+                marker: ::marker::PhantomData,
+            }
+        }
+    }
+
+    unsafe impl<K, V> Send for Iter<'_, K, V>
+    where
+        K: Send,
+        V: Send,
+    {
+    }
+
+    unsafe impl<K, V> Send for IterMut<'_, K, V>
+    where
+        K: Send,
+        V: Send,
+    {
+    }
+
+    unsafe impl<K, V> Send for IntoIter<K, V>
+    where
+        K: Send,
+        V: Send,
+    {
+    }
+
+    unsafe impl<K, V> Send for Drain<'_, K, V>
+    where
+        K: Send,
+        V: Send,
+    {
+    }
+
+    unsafe impl<K, V> Sync for Iter<'_, K, V>
+    where
+        K: Sync,
+        V: Sync,
+    {
+    }
+
+    unsafe impl<K, V> Sync for IterMut<'_, K, V>
+    where
+        K: Sync,
+        V: Sync,
+    {
+    }
+
+    unsafe impl<K, V> Sync for IntoIter<K, V>
+    where
+        K: Sync,
+        V: Sync,
+    {
+    }
+
+    unsafe impl<K, V> Sync for Drain<'_, K, V>
+    where
+        K: Sync,
+        V: Sync,
+    {
+    }
+
+    impl<K, V> Clone for Iter<'_, K, V> {
+        #[inline] fn clone(&self) -> Self {
+            Iter { ..*self }
+        }
+    }
+
+    impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for Iter<'_, K, V> {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_list().entries(self.clone()).finish()
+        }
+    }
+
+    impl<K, V> fmt::Debug for IterMut<'_, K, V>
+    where
+        K: fmt::Debug,
+        V: fmt::Debug,
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_list().entries(self.iter()).finish()
+        }
+    }
+
+    impl<K, V> fmt::Debug for IntoIter<K, V>
+    where
+        K: fmt::Debug,
+        V: fmt::Debug,
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_list().entries(self.iter()).finish()
+        }
+    }
+
+    impl<K, V> fmt::Debug for Drain<'_, K, V>
+    where
+        K: fmt::Debug,
+        V: fmt::Debug,
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_list().entries(self.iter()).finish()
+        }
+    }
+
+    impl<'a, K, V> Iterator for Iter<'a, K, V> {
+        type Item = (&'a K, &'a V);
+
+        #[inline] fn next(&mut self) -> Option<(&'a K, &'a V)>
+        {
+            if self.remaining == 0 {
+                None
+            } else {
+                self.remaining -= 1;
+                unsafe {
+                    let (key, value) = (*self.head).entry_ref();
+                    self.head = (*self.head).links.value.next.as_ptr();
+                    Some((key, value))
+                }
+            }
+        }
+
+        #[inline] fn size_hint(&self) -> (usize, Option<usize>) {
+            (self.remaining, Some(self.remaining))
+        }
+    }
+
+    impl<'a, K, V> Iterator for IterMut<'a, K, V> {
+        type Item = (&'a K, &'a mut V);
+
+        #[inline] fn next(&mut self) -> Option<(&'a K, &'a mut V)>
+        {
+            if self.remaining == 0 {
+                None
+            } else {
+                self.remaining -= 1;
+                unsafe {
+                    let head = self.head.as_ptr();
+                    let (key, value) = (*head).entry_mut();
+                    self.head = Some((*head).links.value.next);
+                    Some((key, value))
+                }
+            }
+        }
+
+        #[inline] fn size_hint(&self) -> (usize, Option<usize>) {
+            (self.remaining, Some(self.remaining))
+        }
+    }
+
+    impl<K, V> Iterator for IntoIter<K, V> {
+        type Item = (K, V);
+
+        #[inline] fn next(&mut self) -> Option<(K, V)>
+        {
+            if self.remaining == 0 {
+                return None;
+            }
+            self.remaining -= 1;
+            unsafe {
+                let head = self.head.as_ptr();
+                self.head = Some((*head).links.value.next);
+                let mut e = Box::from_raw(head);
+                Some(e.take_entry())
+            }
+        }
+
+        #[inline] fn size_hint(&self) -> (usize, Option<usize>) {
+            (self.remaining, Some(self.remaining))
+        }
+    }
+
+    impl<K, V> Iterator for Drain<'_, K, V> {
+        type Item = (K, V);
+
+        #[inline] fn next(&mut self) -> Option<(K, V)>
+        {
+            if self.remaining == 0 {
+                return None;
+            }
+            self.remaining -= 1;
+            unsafe {
+                let mut head = NonNull::new_unchecked(self.head.as_ptr());
+                self.head = Some(head.as_ref().links.value.next);
+                let entry = head.as_mut().take_entry();
+                push_free(self.free.as_mut(), head);
+                Some(entry)
+            }
+        }
+
+        #[inline] fn size_hint(&self) -> (usize, Option<usize>) {
+            (self.remaining, Some(self.remaining))
+        }
+    }
+
+    impl<'a, K, V> DoubleEndedIterator for Iter<'a, K, V> {
+        #[inline] fn next_back(&mut self) -> Option<(&'a K, &'a V)>
+        {
+            if self.remaining == 0 {
+                None
+            } else {
+                self.remaining -= 1;
+                unsafe {
+                    let tail = self.tail;
+                    self.tail = (*tail).links.value.prev.as_ptr();
+                    let (key, value) = (*tail).entry_ref();
+                    Some((key, value))
+                }
+            }
+        }
+    }
+
+    impl<'a, K, V> DoubleEndedIterator for IterMut<'a, K, V> {
+        #[inline] fn next_back(&mut self) -> Option<(&'a K, &'a mut V)>
+        {
+            if self.remaining == 0 {
+                None
+            } else {
+                self.remaining -= 1;
+                unsafe {
+                    let tail = self.tail.as_ptr();
+                    self.tail = Some((*tail).links.value.prev);
+                    let (key, value) = (*tail).entry_mut();
+                    Some((key, value))
+                }
+            }
+        }
+    }
+
+    impl<K, V> DoubleEndedIterator for IntoIter<K, V> {
+        #[inline] fn next_back(&mut self) -> Option<(K, V)>
+        {
+            if self.remaining == 0 {
+                return None;
+            }
+            self.remaining -= 1;
+            unsafe {
+                let mut e = *Box::from_raw(self.tail.as_ptr());
+                self.tail = Some(e.links.value.prev);
+                Some(e.take_entry())
+            }
+        }
+    }
+
+    impl<K, V> DoubleEndedIterator for Drain<'_, K, V> {
+        #[inline] fn next_back(&mut self) -> Option<(K, V)>
+        {
+            if self.remaining == 0 {
+                return None;
+            }
+            self.remaining -= 1;
+            unsafe {
+                let mut tail = NonNull::new_unchecked(self.tail.as_ptr());
+                self.tail = Some(tail.as_ref().links.value.prev);
+                let entry = tail.as_mut().take_entry();
+                push_free(&mut *self.free.as_ptr(), tail);
+                Some(entry)
+            }
+        }
+    }
+
+    impl<K, V> ExactSizeIterator for Iter<'_, K, V> {}
+
+    impl<K, V> ExactSizeIterator for IterMut<'_, K, V> {}
+
+    impl<K, V> ExactSizeIterator for IntoIter<K, V> {}
+
+    impl<K, V> Drop for IntoIter<K, V> {
+        #[inline] fn drop(&mut self) {
+            for _ in 0..self.remaining {
+                unsafe {
+                    let tail = self.tail.as_ptr();
+                    self.tail = Some((*tail).links.value.prev);
+                    (*tail).take_entry();
+                    let _ = Box::from_raw(tail);
+                }
+            }
+        }
+    }
+
+    impl<K, V> Drop for Drain<'_, K, V> {
+        #[inline] fn drop(&mut self) {
+            for _ in 0..self.remaining {
+                unsafe {
+                    let mut tail = NonNull::new_unchecked(self.tail.as_ptr());
+                    self.tail = Some(tail.as_ref().links.value.prev);
+                    tail.as_mut().take_entry();
+                    push_free(&mut *self.free.as_ptr(), tail);
+                }
+            }
+        }
+    }
+
+    /// The `CursorMut` struct and its implementation provide the basic mutable Cursor API for Linked
+    /// lists as proposed in
+    /// [here](https://github.com/rust-lang/rfcs/blob/master/text/2570-linked-list-cursors.md), with
+    /// several exceptions:
+    ///
+    /// - It behaves similarly to Rust's Iterators, returning `None` when the end of the list is
+    ///   reached. A _guard_ node is positioned between the head and tail of the linked list to
+    ///   facilitate this. If the cursor is over this guard node, `None` is returned, signaling the end
+    ///   or start of the list. From this position, the cursor can move in either direction as the
+    ///   linked list is circular, with the guard node connecting the two ends.
+    /// - The current implementation does not include an `index` method, as it does not track the index
+    ///   of its elements. It provides access to each map entry as a tuple of `(&K, &mut V)`.
+    ///
+    pub struct CursorMut<'a, K, V, S> {
+        cur: *mut Node<K, V>,
+        hash_builder: &'a S,
+        free: &'a mut Option<NonNull<Node<K, V>>>,
+        values: &'a mut Option<NonNull<Node<K, V>>>,
+        table: &'a mut hashbrown::HashTable<NonNull<Node<K, V>>>,
+    }
+
+    impl<K, V, S> CursorMut<'_, K, V, S> {
+        /// Returns an `Option` of the current element in the list, provided it is not the
+        /// _guard_ node, and `None` overwise.
+        #[inline] pub fn current(&mut self) -> Option<(&K, &mut V)> {
+            unsafe {
+                let at = NonNull::new_unchecked(self.cur);
+                self.peek(at)
+            }
+        }
+        /// Retrieves the next element in the list (moving towards the end).
+        #[inline] pub fn peek_next(&mut self) -> Option<(&K, &mut V)> {
+            unsafe {
+                let at = (*self.cur).links.value.next;
+                self.peek(at)
+            }
+        }
+        /// Retrieves the previous element in the list (moving towards the front).
+        #[inline] pub fn peek_prev(&mut self) -> Option<(&K, &mut V)> {
+            unsafe {
+                let at = (*self.cur).links.value.prev;
+                self.peek(at)
+            }
+        }
+
+        // Retrieves the element without advancing current position to it.
+        #[inline] fn peek(&mut self, at: NonNull<Node<K, V>>) -> Option<(&K, &mut V)>
+        {
+            if let Some(values) = self.values {
+                unsafe {
+                    let node = at.as_ptr();
+                    if node == values.as_ptr() {
+                        None
+                    } else {
+                        let entry = (*node).entry_mut();
+                        Some((&entry.0, &mut entry.1))
+                    }
+                }
+            } else {
+                None
+            }
+        }
+        /// Updates the pointer to the current element to the next element in the
+        /// list (that is, moving towards the end).
+        #[inline] pub fn move_next(&mut self) {
+            let at = unsafe { (*self.cur).links.value.next };
+            self.muv(at);
+        }
+        /// Updates the pointer to the current element to the previous element in the
+        /// list (that is, moving towards the front).
+        #[inline] pub fn move_prev(&mut self) {
+            let at = unsafe { (*self.cur).links.value.prev };
+            self.muv(at);
+        }
+
+        // Updates the pointer to the current element to the one returned by the at closure function.
+        #[inline] fn muv(&mut self, at: NonNull<Node<K, V>>) {
+            self.cur = at.as_ptr();
+        }
+        /// Inserts the provided key and value before the current element. It checks if an entry
+        /// with the given key exists and, if so, replaces its value with the provided `key`
+        /// parameter. The key is not updated; this matters for types that can be `==` without
+        /// being identical.
+        ///
+        /// If the entry doesn't exist, it creates a new one. If a value has been updated, the
+        /// function returns the *old* value wrapped with `Some`  and `None` otherwise.
+        #[inline] pub fn insert_before(&mut self, key: K, value: V) -> Option<V>
+        where
+            K: Eq + Hash,
+            S: BuildHasher,
+        {
+            let before = unsafe { NonNull::new_unchecked(self.cur) };
+            self.insert(key, value, before)
+        }
+        /// Inserts the provided key and value after the current element. It checks if an entry
+        /// with the given key exists and, if so, replaces its value with the provided `key`
+        /// parameter. The key is not updated; this matters for types that can be `==` without
+        /// being identical.
+        ///
+        /// If the entry doesn't exist, it creates a new one. If a value has been updated, the
+        /// function returns the *old* value wrapped with `Some`  and `None` otherwise.
+        #[inline] pub fn insert_after(&mut self, key: K, value: V) -> Option<V>
+        where
+            K: Eq + Hash,
+            S: BuildHasher,
+        {
+            let before = unsafe { (*self.cur).links.value.next };
+            self.insert(key, value, before)
+        }
+
+        // Inserts an element immediately before the given `before` node.
+        #[inline] fn insert(&mut self, key: K, value: V, before: NonNull<Node<K, V>>) -> Option<V>
+        where
+            K: Eq + Hash,
+            S: BuildHasher,
+        {
+            unsafe {
+                let hash = hash_key(self.hash_builder, &key);
+                let i_entry = self
+                    .table
+                    .find_entry(hash, |o| (*o).as_ref().key_ref().eq(&key));
+
+                match i_entry {
+                    Ok(occupied) => {
+                        let mut node = *occupied.into_mut();
+                        let pv = mem::replace(&mut node.as_mut().entry_mut().1, value);
+                        if node != before {
+                            detach_node(node);
+                            attach_before(node, before);
+                        }
+                        Some(pv)
+                    }
+                    Err(_) => {
+                        let mut new_node = allocate_node(self.free);
+                        new_node.as_mut().put_entry((key, value));
+                        attach_before(new_node, before);
+                        let hash_builder = self.hash_builder;
+                        self.table.insert_unique(hash, new_node, move |k| {
+                            hash_key(hash_builder, (*k).as_ref().key_ref())
+                        });
+                        None
+                    }
+                }
+            }
+        }
+    }
+
+    pub struct Keys<'a, K, V> {
+        inner: Iter<'a, K, V>,
+    }
+
+    impl<K: fmt::Debug, V> fmt::Debug for Keys<'_, K, V> {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_list().entries(self.clone()).finish()
+        }
+    }
+
+    impl<'a, K, V> Clone for Keys<'a, K, V> {
+        #[inline] fn clone(&self) -> Keys<'a, K, V> {
+            Keys {
+                inner: self.inner.clone(),
+            }
+        }
+    }
+
+    impl<'a, K, V> Iterator for Keys<'a, K, V> {
+        type Item = &'a K;
+
+        #[inline] fn next(&mut self) -> Option<&'a K> {
+            self.inner.next().map(|e| e.0)
+        }
+
+        #[inline] fn size_hint(&self) -> (usize, Option<usize>) {
+            self.inner.size_hint()
+        }
+    }
+
+    impl<'a, K, V> DoubleEndedIterator for Keys<'a, K, V> {
+        #[inline] fn next_back(&mut self) -> Option<&'a K> {
+            self.inner.next_back().map(|e| e.0)
+        }
+    }
+
+    impl<K, V> ExactSizeIterator for Keys<'_, K, V> {
+        #[inline] fn len(&self) -> usize {
+            self.inner.len()
+        }
+    }
+
+    pub struct Values<'a, K, V> {
+        inner: Iter<'a, K, V>,
+    }
+
+    impl<K, V> Clone for Values<'_, K, V> {
+        #[inline] fn clone(&self) -> Self {
+            Values {
+                inner: self.inner.clone(),
+            }
+        }
+    }
+
+    impl<K, V: fmt::Debug> fmt::Debug for Values<'_, K, V> {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_list().entries(self.clone()).finish()
+        }
+    }
+
+    impl<'a, K, V> Iterator for Values<'a, K, V> {
+        type Item = &'a V;
+
+        #[inline] fn next(&mut self) -> Option<&'a V> {
+            self.inner.next().map(|e| e.1)
+        }
+
+        #[inline] fn size_hint(&self) -> (usize, Option<usize>) {
+            self.inner.size_hint()
+        }
+    }
+
+    impl<'a, K, V> DoubleEndedIterator for Values<'a, K, V> {
+        #[inline] fn next_back(&mut self) -> Option<&'a V> {
+            self.inner.next_back().map(|e| e.1)
+        }
+    }
+
+    impl<K, V> ExactSizeIterator for Values<'_, K, V> {
+        #[inline] fn len(&self) -> usize {
+            self.inner.len()
+        }
+    }
+
+    pub struct ValuesMut<'a, K, V> {
+        inner: IterMut<'a, K, V>,
+    }
+
+    impl<K, V> fmt::Debug for ValuesMut<'_, K, V>
+    where
+        K: fmt::Debug,
+        V: fmt::Debug,
+    {
+        #[inline] fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_list().entries(self.inner.iter()).finish()
+        }
+    }
+
+    impl<'a, K, V> Iterator for ValuesMut<'a, K, V> {
+        type Item = &'a mut V;
+
+        #[inline] fn next(&mut self) -> Option<&'a mut V> {
+            self.inner.next().map(|e| e.1)
+        }
+
+        #[inline] fn size_hint(&self) -> (usize, Option<usize>) {
+            self.inner.size_hint()
+        }
+    }
+
+    impl<'a, K, V> DoubleEndedIterator for ValuesMut<'a, K, V> {
+        #[inline] fn next_back(&mut self) -> Option<&'a mut V> {
+            self.inner.next_back().map(|e| e.1)
+        }
+    }
+
+    impl<K, V> ExactSizeIterator for ValuesMut<'_, K, V> {
+        #[inline] fn len(&self) -> usize {
+            self.inner.len()
+        }
+    }
+
+    impl<'a, K, V, S> IntoIterator for &'a LinkedHashMap<K, V, S> where
+    S:Copy,
+    {
+        type Item = (&'a K, &'a V);
+        type IntoIter = Iter<'a, K, V>;
+
+        #[inline] fn into_iter(self) -> Iter<'a, K, V> {
+            self.iter()
+        }
+    }
+
+    impl<'a, K, V, S> IntoIterator for &'a mut LinkedHashMap<K, V, S> where
+    S:Copy,
+    {
+        type Item = (&'a K, &'a mut V);
+        type IntoIter = IterMut<'a, K, V>;
+
+        #[inline] fn into_iter(self) -> IterMut<'a, K, V> {
+            self.iter_mut()
+        }
+    }
+
+    impl<K, V, S> IntoIterator for LinkedHashMap<K, V, S> where
+    S:Copy,
+    {
+        type Item = (K, V);
+        type IntoIter = IntoIter<K, V>;
+
+        #[inline] fn into_iter(mut self) -> IntoIter<K, V> {
+            unsafe {
+                let (head, tail) = if let Some(values) = self.values {
+                    let ValueLinks {
+                        next: head,
+                        prev: tail,
+                    } = values.as_ref().links.value;
+
+                    let _ = Box::from_raw(self.values.as_ptr());
+                    self.values = None;
+
+                    (Some(head), Some(tail))
+                } else {
+                    (None, None)
+                };
+                let len = self.len();
+
+                drop_free_nodes(self.free.take());
+
+                self.table.clear();
+
+                IntoIter {
+                    head,
+                    tail,
+                    remaining: len,
+                    marker: ::marker::PhantomData,
+                }
+            }
+        }
+    } 
+
+    impl<K, V> Clone for ValueLinks<K, V> {
+        #[inline] fn clone(&self) -> Self {
+            *self
+        }
+    }
+
+    impl<K, V> Copy for ValueLinks<K, V> {} 
+
+    impl<K, V> Clone for FreeLink<K, V> {
+        #[inline] fn clone(&self) -> Self {
+            *self
+        }
+    }
+
+    impl<K, V> Copy for FreeLink<K, V> {}
+    
+
+    impl<K, V> Node<K, V> {
+        #[inline] unsafe fn put_entry(&mut self, entry: (K, V)) {
+            self.entry.as_mut_ptr().write(entry)
+        }
+
+        #[inline] unsafe fn entry_ref(&self) -> &(K, V) {
+            &*self.entry.as_ptr()
+        }
+
+        #[inline] unsafe fn key_ref(&self) -> &K {
+            &(*self.entry.as_ptr()).0
+        }
+
+        #[inline] unsafe fn entry_mut(&mut self) -> &mut (K, V) {
+            &mut *self.entry.as_mut_ptr()
+        }
+
+        #[inline] unsafe fn take_entry(&mut self) -> (K, V) {
+            self.entry.as_ptr().read()
+        }
+    }
+
+    trait OptNonNullExt<T> {
+        #[allow(clippy::wrong_self_convention)]
+        fn as_ptr(self) -> *mut T;
+    }
+
+    impl<T> OptNonNullExt<T> for Option<NonNull<T>> {
+        #[inline] fn as_ptr(self) -> *mut T {
+            match self {
+                Some(ptr) => ptr.as_ptr(),
+                None => ptr::null_mut(),
+            }
+        }
+    }
+
+    // Allocate a circular list guard node if not present.
+    #[inline] unsafe fn ensure_guard_node<K, V>(head: &mut Option<NonNull<Node<K, V>>>) {
+        if head.is_none() {
+            let mut p = NonNull::new_unchecked(Box::into_raw(Box::new(Node {
+                entry: MaybeUninit::uninit(),
+                links: Links {
+                    value: ValueLinks {
+                        next: NonNull::dangling(),
+                        prev: NonNull::dangling(),
+                    },
+                },
+            })));
+            p.as_mut().links.value = ValueLinks { next: p, prev: p };
+            *head = Some(p);
+        }
+    }
+
+    // Attach the `to_attach` node to the existing circular list *before* `node`.
+    #[inline] unsafe fn attach_before<K, V>(mut to_attach: NonNull<Node<K, V>>, mut node: NonNull<Node<K, V>>) {
+        to_attach.as_mut().links.value = ValueLinks {
+            prev: node.as_ref().links.value.prev,
+            next: node,
+        };
+        node.as_mut().links.value.prev = to_attach;
+        (*to_attach.as_mut().links.value.prev.as_ptr())
+            .links
+            .value
+            .next = to_attach;
+    }
+
+    #[inline] unsafe fn detach_node<K, V>(mut node: NonNull<Node<K, V>>) {
+        node.as_mut().links.value.prev.as_mut().links.value.next = node.as_ref().links.value.next;
+        node.as_mut().links.value.next.as_mut().links.value.prev = node.as_ref().links.value.prev;
+    }
+
+    #[inline] unsafe fn push_free<K, V>(
+        free_list: &mut Option<NonNull<Node<K, V>>>,
+        mut node: NonNull<Node<K, V>>,
+    ) {
+        node.as_mut().links.free.next = *free_list;
+        *free_list = Some(node);
+    }
+
+    #[inline] unsafe fn pop_free<K, V>(
+        free_list: &mut Option<NonNull<Node<K, V>>>,
+    ) -> Option<NonNull<Node<K, V>>> {
+        if let Some(free) = *free_list {
+            *free_list = free.as_ref().links.free.next;
+            Some(free)
+        } else {
+            None
+        }
+    }
+
+    #[inline] unsafe fn allocate_node<K, V>(free_list: &mut Option<NonNull<Node<K, V>>>) -> NonNull<Node<K, V>> {
+        if let Some(mut free) = pop_free(free_list) {
+            free.as_mut().links.value = ValueLinks {
+                next: NonNull::dangling(),
+                prev: NonNull::dangling(),
+            };
+            free
+        } else {
+            NonNull::new_unchecked(Box::into_raw(Box::new(Node {
+                entry: MaybeUninit::uninit(),
+                links: Links {
+                    value: ValueLinks {
+                        next: NonNull::dangling(),
+                        prev: NonNull::dangling(),
+                    },
+                },
+            })))
+        }
+    }
+
+    // Given node is assumed to be the guard node and is *not* dropped.
+    #[inline] unsafe fn drop_value_nodes<K, V>(guard: NonNull<Node<K, V>>) {
+        let mut cur = guard.as_ref().links.value.prev;
+        while cur != guard {
+            let prev = cur.as_ref().links.value.prev;
+            cur.as_mut().take_entry();
+            let _ = Box::from_raw(cur.as_ptr());
+            cur = prev;
+        }
+    }
+
+    // Drops all linked free nodes starting with the given node.  Free nodes are only non-circular
+    // singly linked, and should have uninitialized keys / values.
+    #[inline] unsafe fn drop_free_nodes<K, V>(mut free: Option<NonNull<Node<K, V>>>) {
+        while let Some(some_free) = free {
+            let next_free = some_free.as_ref().links.free.next;
+            let _ = Box::from_raw(some_free.as_ptr());
+            free = next_free;
+        }
+    }
+
+    #[inline] unsafe fn remove_node<K, V>(
+        free_list: &mut Option<NonNull<Node<K, V>>>,
+        mut node: NonNull<Node<K, V>>,
+    ) -> (K, V) {
+        detach_node(node);
+        push_free(free_list, node);
+        node.as_mut().take_entry()
+    }
+
+    #[inline] unsafe fn hash_node<S, K, V>(s: &S, node: NonNull<Node<K, V>>) -> u64
+    where
+        S: BuildHasher,
+        K: Hash,
+    {
+        hash_key(s, node.as_ref().key_ref())
+    }
+
+    #[inline]
+    fn hash_key<S, Q>(s: &S, k: &Q) -> u64
+    where
+        S: BuildHasher,
+        Q: Hash + ?Sized,
+    {
+        let mut hasher = s.build_hasher();
+        k.hash(&mut hasher);
+        hasher.finish()
+    }
+    
+    struct DropFilteredValues<'a, K, V> {
+        free: &'a mut Option<NonNull<Node<K, V>>>,
+        cur_free: Option<NonNull<Node<K, V>>>,
+    }
+
+    impl<K, V> DropFilteredValues<'_, K, V> {
+        #[inline] fn drop_later(&mut self, node: NonNull<Node<K, V>>) {
+            unsafe {
+                detach_node(node);
+                push_free(&mut self.cur_free, node);
+            }
+        }
+    }
+
+    impl<K, V> Drop for DropFilteredValues<'_, K, V> {
+        fn drop(&mut self) {
+            unsafe {
+                let end_free = self.cur_free;
+                while self.cur_free != *self.free {
+                    let cur_free = self.cur_free.as_ptr();
+                    (*cur_free).take_entry();
+                    self.cur_free = (*cur_free).links.free.next;
+                }
+                *self.free = end_free;
+            }
+        }
     }
     
     pub struct LruCache<K, V, S = DefaultHashBuilder> where S:Copy
@@ -4228,6 +6344,57 @@ pub mod hash
         map: LinkedHashMap<K, V, S>,
         max_size: usize,
         builder:Option<S>,
+    }
+
+    impl<K, V, S> LruCache<K, V, S> where
+    S:Copy,
+    {
+        #[inline] pub fn with_hasher(capacity: usize, hash_builder: S) -> Self {
+            LruCache {
+                map: LinkedHashMap::with_hasher(hash_builder),
+                max_size: capacity,
+                builder:Some(hash_builder),
+            }
+        }
+
+        #[inline] pub fn capacity(&self) -> usize {
+            self.max_size
+        }
+
+        #[inline] pub fn len(&self) -> usize {
+            self.map.len()
+        }
+
+        #[inline] pub fn is_empty(&self) -> bool {
+            self.map.is_empty()
+        }
+
+        #[inline] pub fn clear(&mut self) {
+            self.map.clear();
+        }
+
+        #[inline] pub fn iter(&self) -> Iter<K, V> {
+            self.map.iter()
+        }
+
+        #[inline] pub fn iter_mut(&mut self) -> IterMut<K, V> {
+            self.map.iter_mut()
+        }
+
+        #[inline] pub fn drain(&mut self) -> Drain<K, V> {
+            self.map.drain()
+        }
+    }
+
+    
+    impl<K, V, S> fmt::Debug for LruCache<K, V, S> where
+    K: fmt::Debug,
+    V: fmt::Debug,
+    S: Clone + Copy,
+    {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.debug_map().entries(self.iter().rev()).finish()
+        }
     }
 }
 
@@ -4919,6 +7086,11 @@ pub mod path
 pub mod ptr
 {
 	pub use std::ptr::{ * };
+}
+
+pub mod rc
+{
+	pub use std::rc::{ * };
 }
 
 pub mod result
@@ -6644,6 +8816,8 @@ pub mod sqlite3
             ) -> *const ::os::raw::c_char;
             
             pub fn sqlite3_is_interrupted(arg1: *mut sqlite3) -> ::os::raw::c_int;
+
+            pub fn sqlite3_stmt_isexplain(pStmt: *mut sqlite3_stmt) -> ::ffi::c_int;
 		}
 		
 		#[repr(C)] #[derive(Debug, Copy, Clone)]
@@ -8516,7 +10690,7 @@ pub mod sqlite3
             ffi::{ c_int },
             sqlite3::
             {
-                error::{ check, Connection, Result },
+                error::{ * },
                 *,
             },
             *,
@@ -10627,6 +12801,7 @@ pub mod sqlite3
 			use ::
 			{
                 borrow::{ Cow },
+                convert::{ * },
                 error::{ Error },
                 sqlite3::
                 {
@@ -10769,9 +12944,7 @@ pub mod sqlite3
 			from_sql_integral!(non_zero std::num::NonZeroI16, i16);
 			from_sql_integral!(non_zero std::num::NonZeroI32, i32);
 			from_sql_integral!(non_zero std::num::NonZeroI64, i64);
-			#[cfg(feature = "i128_blob")]
-			from_sql_integral!(non_zero std::num::NonZeroI128, i128);
-
+            
 			from_sql_integral!(non_zero std::num::NonZeroUsize, usize);
 			from_sql_integral!(non_zero std::num::NonZeroU8, u8);
 			from_sql_integral!(non_zero std::num::NonZeroU16, u16);
@@ -10823,13 +12996,13 @@ pub mod sqlite3
 				}
 			}
 
-			impl FromSql for std::rc::Rc<str> {
+			impl FromSql for ::rc::Rc<str> {
 				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					value.as_str().map(Into::into)
 				}
 			}
 
-			impl FromSql for std::sync::Arc<str> {
+			impl FromSql for ::sync::Arc<str> {
 				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					value.as_str().map(Into::into)
 				}
@@ -10869,22 +13042,6 @@ pub mod sqlite3
 				}
 			}
 
-			#[cfg(feature = "i128_blob")]
-			impl FromSql for i128 {
-				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-					let bytes = <[u8; 16]>::column_result(value)?;
-					Ok(Self::from_be_bytes(bytes) ^ (1_i128 << 127))
-				}
-			}
-
-			#[cfg(feature = "uuid")]
-			impl FromSql for uuid::Uuid {
-				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-					let bytes = <[u8; 16]>::column_result(value)?;
-					Ok(Self::from_u128(u128::from_be_bytes(bytes)))
-				}
-			}
-
 			impl<T: FromSql> FromSql for Option<T> {
 				#[inline] fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
 					match value {
@@ -10915,9 +13072,11 @@ pub mod sqlite3
 		{
 			/*!
 			*/
+            use std::convert::TryFrom;
 			use ::
 			{
                 borrow::{ Cow },
+                convert::{ * },
                 sqlite3::{ * },
 				*,
 			}; use super::{ Null, Value, ValueRef };
@@ -10925,7 +13084,6 @@ pub mod sqlite3
 			#[cfg(feature = "array")]
 			use crate::vtab::array::Array;
 			use crate::{Error, Result};
-			use std::borrow::Cow;
 			*/
 			/// `ToSqlOutput` represents the possible output types for implementers of the
 			/// [`ToSql`] trait.
@@ -11003,19 +13161,7 @@ pub mod sqlite3
 			from_value!(non_zero std::num::NonZeroIsize);
 			from_value!(non_zero std::num::NonZeroU8);
 			from_value!(non_zero std::num::NonZeroU16);
-			from_value!(non_zero std::num::NonZeroU32);
-
-			// It would be nice if we could avoid the heap allocation (of the `Vec`) that
-			// `i128` needs in `Into<Value>`, but it's probably fine for the moment, and not
-			// worth adding another case to Value.
-			#[cfg(feature = "i128_blob")]
-			from_value!(i128);
-
-			#[cfg(feature = "i128_blob")]
-			from_value!(non_zero std::num::NonZeroI128);
-
-			#[cfg(feature = "uuid")]
-			from_value!(uuid::Uuid);
+			from_value!(non_zero std::num::NonZeroU32); 
 
 			impl ToSql for ToSqlOutput<'_> {
 				#[inline] fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
@@ -11111,15 +13257,7 @@ pub mod sqlite3
 			to_sql_self!(std::num::NonZeroU8);
 			to_sql_self!(std::num::NonZeroU16);
 			to_sql_self!(std::num::NonZeroU32);
-
-			#[cfg(feature = "i128_blob")]
-			to_sql_self!(i128);
-
-			#[cfg(feature = "i128_blob")]
-			to_sql_self!(std::num::NonZeroI128);
-
-			#[cfg(feature = "uuid")]
-			to_sql_self!(uuid::Uuid);
+            
 
 			macro_rules! to_sql_self_fallible(
 				($t:ty) => (
@@ -11710,7 +13848,7 @@ pub mod sqlite3
 			*/
 			/// Similar to `std::ffi::CString`, but avoids heap allocating if the string is small enough.
 			#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-			pub struct SmallCString(SmallVec<[u8; 16]>);
+			pub struct SmallCString( smallvec::SmallVec<[u8; 16]> );
 
 			impl SmallCString 
             {
@@ -11719,7 +13857,7 @@ pub mod sqlite3
 					if s.as_bytes().contains(&0_u8) {
 						return Err(Self::fabricate_nul_error(s));
 					}
-					let mut buf = SmallVec::with_capacity(s.len() + 1);
+					let mut buf = smallvec::SmallVec::with_capacity(s.len() + 1);
 					buf.extend_from_slice(s.as_bytes());
 					buf.push(0);
 					let res = Self(buf);
@@ -11727,40 +13865,25 @@ pub mod sqlite3
 					Ok(res)
 				}
 
-				#[inline] pub fn as_str(&self) -> &str {
+				#[inline] pub fn as_str(&self) -> &str
+                {
 					self.debug_checks();
 					// Constructor takes a &str so this is safe.
 					unsafe { std::str::from_utf8_unchecked(self.as_bytes_without_nul()) }
 				}
 
-				/// Get the bytes not including the NUL terminator. E.g. the bytes which
-				/// make up our `str`:
-				/// - `SmallCString::new("foo").as_bytes_without_nul() == b"foo"`
-				/// - `SmallCString::new("foo").as_bytes_with_nul() == b"foo\0"`
+				/// Get the bytes not including the NUL terminator.
 				#[inline] pub fn as_bytes_without_nul(&self) -> &[u8] {
 					self.debug_checks();
 					&self.0[..self.len()]
 				}
-
-				/// Get the bytes behind this str *including* the NUL terminator. This
-				/// should never return an empty slice.
-				#[inline] pub fn as_bytes_with_nul(&self) -> &[u8] {
+				/// Get the bytes behind this str *including* the NUL terminator.
+				#[inline] pub fn as_bytes_with_nul(&self) -> &[u8]
+                {
 					self.debug_checks();
 					&self.0
 				}
 
-				#[inline]
-				#[cfg(debug_assertions)]
-				fn debug_checks(&self) {
-					debug_assert_ne!(self.0.len(), 0);
-					debug_assert_eq!(self.0[self.0.len() - 1], 0);
-					let strbytes = &self.0[..(self.0.len() - 1)];
-					debug_assert!(!strbytes.contains(&0));
-					debug_assert!(std::str::from_utf8(strbytes).is_ok());
-				}
-
-				#[inline]
-				#[cfg(not(debug_assertions))]
 				fn debug_checks(&self) {}
 
 				#[inline] pub fn len(&self) -> usize {
@@ -11768,9 +13891,7 @@ pub mod sqlite3
 					self.0.len() - 1
 				}
 
-				#[inline]
-				#[allow(unused)]
-				pub fn is_empty(&self) -> bool {
+				#[inline] pub fn is_empty(&self) -> bool {
 					self.len() == 0
 				}
 
@@ -11824,6 +13945,7 @@ pub mod sqlite3
 			use ::
 			{
                 ffi::{ * },
+                convert::{ * },
                 marker::{ PhantomData },
                 ptr::{ NonNull },
                 sqlite3::{ * },
@@ -11840,7 +13962,7 @@ pub mod sqlite3
 			pub struct SqliteMallocString
             {
 				ptr: NonNull<c_char>,
-				_boo: PhantomData<Box<[c_char]>>,
+				_boo: ::marker::PhantomData<Box<[c_char]>>,
 			}
 
 			// unsafe impl Send for SqliteMallocString {}
@@ -11848,65 +13970,46 @@ pub mod sqlite3
 
 			impl SqliteMallocString
             {
-				/// SAFETY: Caller must be certain that `m` a nul-terminated c string
-				/// allocated by `sqlite3_malloc`, and that SQLite expects us to free it!
-				#[inline] pub unsafe fn from_raw_nonnull(ptr: NonNull<c_char>) -> Self {
+				#[inline] pub unsafe fn from_raw_nonnull(ptr: NonNull<c_char>) -> Self
+                {
 					Self {
 						ptr,
-						_boo: PhantomData,
+						_boo: ::marker::PhantomData,
 					}
 				}
-
-				/// SAFETY: Caller must be certain that `m` a nul-terminated c string
-				/// allocated by `sqlite3_malloc`, and that SQLite expects us to free it!
-				#[inline] pub unsafe fn from_raw(ptr: *mut c_char) -> Option<Self> {
+				#[inline] pub unsafe fn from_raw(ptr: *mut c_char) -> Option<Self>
+                {
 					NonNull::new(ptr).map(|p| Self::from_raw_nonnull(p))
 				}
-
-				/// Get the pointer behind `self`. After this is called, we no longer manage
-				/// it.
-				#[inline] pub fn into_inner(self) -> NonNull<c_char> {
+				/// Get the pointer behind `self`. After this is called, we no longer manage it.
+				#[inline] pub fn into_inner(self) -> NonNull<c_char>
+                {
 					let p = self.ptr;
 					std::mem::forget(self);
 					p
 				}
-
-				/// Get the pointer behind `self`. After this is called, we no longer manage
-				/// it.
-				#[inline] pub fn into_raw(self) -> *mut c_char {
+				/// Get the pointer behind `self`. After this is called, we no longer manage it.
+				#[inline] pub fn into_raw(self) -> *mut c_char
+                {
 					self.into_inner().as_ptr()
 				}
-
-				/// Borrow the pointer behind `self`. We still manage it when this function
-				/// returns. If you want to relinquish ownership, use `into_raw`.
-				#[inline] pub fn as_ptr(&self) -> *const c_char {
+				/// Borrow the pointer behind `self`. We still manage it when this function returns.
+				#[inline] pub fn as_ptr(&self) -> *const c_char
+                {
 					self.ptr.as_ptr()
 				}
 
-				#[inline] pub fn as_cstr(&self) -> &CStr {
+				#[inline] pub fn as_cstr(&self) -> &CStr
+                {
 					unsafe { CStr::from_ptr(self.as_ptr()) }
 				}
 
-				#[inline] pub fn to_string_lossy(&self) -> std::borrow::Cow<'_, str>
+				#[inline] pub fn to_string_lossy(&self) -> ::borrow::Cow<'_, str>
                 {
 					self.as_cstr().to_string_lossy()
 				}
 
 				/// Convert `s` into a SQLite string.
-				///
-				/// This should almost never be done except for cases like error messages or
-				/// other strings that SQLite frees.
-				///
-				/// If `s` contains internal NULs, we'll replace them with
-				/// `NUL_REPLACE_CHAR`.
-				///
-				/// Except for `debug_assert`s which may trigger during testing, this
-				/// function never panics. If we hit integer overflow or the allocation
-				/// fails, we call `handle_alloc_error` which aborts the program after
-				/// calling a global hook.
-				///
-				/// This means it's safe to use in extern "C" functions even outside
-				/// `catch_unwind`.
 				pub fn from_str(s: &str) -> Self {
 					let s = if s.as_bytes().contains(&0) {
 						std::borrow::Cow::Owned(make_nonnull(s))
@@ -12070,9 +14173,9 @@ pub mod sqlite3
 		Ok(CString::new(s)?)
 	}
 	/// Shorthand for `Main` database.
-    pub const MAIN_DB:&CStr = CStr::from_bytes_with_nul(b"main\0"); //c"main";
+    pub const MAIN_DB:Option<&CStr> = None;// CStr::from_bytes_with_nul(b"main\0"); //c"main";
 	/// Shorthand for `Temp` database.
-    pub const TEMP_DB: &CStr = CStr::from_bytes_with_nul(b"temp\0"); //c"temp";
+    pub const TEMP_DB:Option<&CStr> = None;// CStr::from_bytes_with_nul(b"temp\0"); //c"temp";
 	/// A connection to a SQLite database.
 	pub struct Connection
     {
@@ -12168,7 +14271,13 @@ pub mod sqlite3
 		/// Returns the path to the database file, if one exists and is known.
 		#[inline] pub fn path(&self) -> Option<&str>
         {
-			unsafe { inner_connection::db_filename(::marker::PhantomData, self.handle(), MAIN_DB) }
+			unsafe
+            {
+                let main_db_string:String = r#"main"#.to_string();
+                let main_db_cstring: CString = CString::new(main_db_string.as_str()).unwrap();
+                let main_db_cstr: &CStr = main_db_cstring.as_c_str();
+                inner_connection::db_filename( ::marker::PhantomData, self.handle(), main_db_cstr )
+            }
 		}
 		/// Attempts to free as much heap memory as possible from the database connection.
 		#[inline] pub fn release_memory(&self) -> Result<()> { self.db.borrow_mut().release_memory() }
@@ -12445,1250 +14554,14 @@ pub mod time
     }
 }
 
+pub mod usize
+{
+	pub use std::usize::{ * };
+}
+
 pub mod vec
 {
-    pub use std::vec::{ * };
-	
-	use ::
-	{
-        alloc::{ Layout, LayoutErr },
-        boxed::{ Box },
-        borrow::{ Borrow, BorrowMut },
-        hash::{ Hash, Hasher },
-        hint::{ unreachable_unchecked },
-        iter::{ repeat, FromIterator, FusedIterator, IntoIterator },
-        mem::{ self, MaybeUninit },
-        ops::{ self, Range, RangeBounds },
-        ptr::{ self, NonNull},
-        slice::{ self, SliceIndex},
-        vec::{ self, Vec },
-		*,
-	};
-	/*
-	*/    
-	/* 
-    Small vectors in various sizes. */
-    /// Trait to be implemented by a collection that can be extended from a slice
-    #[deprecated]
-    pub trait ExtendFromSlice<T>
-    {
-        /// Extends a collection from a slice of its element type
-        fn extend_from_slice(&mut self, other: &[T]);
-    }
-    
-    impl<T: Clone> ExtendFromSlice<T> for Vec<T>
-    {
-        fn extend_from_slice(&mut self, other: &[T])
-        { Vec::extend_from_slice(self, other) }
-    }
-    /// Error type for APIs with fallible heap allocation
-    #[derive(Debug)]
-    pub enum CollectionAllocErr
-    {
-        /// Overflow `usize::MAX` or other error during size computation
-        CapacityOverflow,
-        /// The allocator return an error
-        AllocErr
-        {
-            /// The layout that was passed to the allocator
-            layout: Layout,
-        },
-    }
-
-    impl fmt::Display for CollectionAllocErr
-    {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-        {
-            write!(f, "Allocation error: {:?}", self)
-        }
-    }
-    
-    impl From<LayoutErr> for CollectionAllocErr
-    {
-        fn from(_: LayoutErr) -> Self { CollectionAllocErr::CapacityOverflow }
-    }
-
-    fn infallible<T>(result: Result<T, CollectionAllocErr>) -> T
-    {
-        match result
-        {
-            Ok(x) => x,
-            Err(CollectionAllocErr::CapacityOverflow) => panic!("capacity overflow"),
-            Err(CollectionAllocErr::AllocErr { layout }) => alloc::handle_alloc_error(layout),
-        }
-    }
-    
-    fn layout_array<T>(n: usize) -> Result<Layout, CollectionAllocErr>
-    {
-        let size = mem::size_of::<T>()
-        .checked_mul(n)
-        .ok_or(CollectionAllocErr::CapacityOverflow)?;
-        let align = mem::align_of::<T>();
-        Layout::from_size_align(size, align).map_err(|_| CollectionAllocErr::CapacityOverflow)
-    }
-
-    unsafe fn deallocate<T>(ptr: *mut T, capacity: usize)
-    {
-        let layout = layout_array::<T>(capacity).unwrap();
-        alloc::dealloc(ptr as *mut u8, layout)
-    }
-    /// An iterator that removes the items from a `SmallVec` and yields them by value.
-    pub struct Drain<'a, T: 'a + Array>
-    {
-        tail_start: usize,
-        tail_len: usize,
-        iter: slice::Iter<'a, T::Item>,
-        vec: NonNull<SmallVec<T>>,
-    }
-
-    impl<'a, T: 'a + Array> fmt::Debug for Drain<'a, T> where
-    T::Item: fmt::Debug,
-    {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-        { f.debug_tuple("Drain").field(&self.iter.as_slice()).finish() }
-    }
-
-    unsafe impl<'a, T: Sync + Array> Sync for Drain<'a, T> {}
-    unsafe impl<'a, T: Send + Array> Send for Drain<'a, T> {}
-
-    impl<'a, T: 'a + Array> Iterator for Drain<'a, T>
-    {
-        type Item = T::Item;
-
-        #[inline] fn next(&mut self) -> Option<T::Item>
-        {
-            self.iter
-            .next()
-            .map(|reference| unsafe { ptr::read(reference) })
-        }
-
-        #[inline] fn size_hint(&self) -> (usize, Option<usize>) { self.iter.size_hint() }
-    }
-
-    impl<'a, T: 'a + Array> DoubleEndedIterator for Drain<'a, T>
-    {
-        #[inline] fn next_back(&mut self) -> Option<T::Item>
-        {
-            self.iter
-            .next_back()
-            .map(|reference| unsafe { ptr::read(reference) })
-        }
-    }
-
-    impl<'a, T: Array> ExactSizeIterator for Drain<'a, T>
-    {
-        #[inline] fn len(&self) -> usize { self.iter.len() }
-    }
-
-    impl<'a, T: Array> FusedIterator for Drain<'a, T> {}
-
-    impl<'a, T: 'a + Array> Drop for Drain<'a, T>
-    {
-        fn drop(&mut self)
-        {
-            self.for_each(drop);
-
-            if self.tail_len > 0
-            {
-                unsafe
-                {
-                    let source_vec = self.vec.as_mut();
-                    let start = source_vec.len();
-                    let tail = self.tail_start;
-                    if tail != start {
-                        let src = source_vec.as_ptr().add(tail);
-                        let dst = source_vec.as_mut_ptr().add(start);
-                        ptr::copy(src, dst, self.tail_len);
-                    }
-                    source_vec.set_len(start + self.tail_len);
-                }
-            }
-        }
-    }
-    
-    enum SmallVecData<A: Array>
-    {
-        Inline(MaybeUninit<A>),
-        Heap((*mut A::Item, usize)),
-    }
-    
-    impl<A: Array> SmallVecData<A>
-    {
-        #[inline] unsafe fn inline(&self) -> *const A::Item
-        {
-            match self
-            {
-                SmallVecData::Inline(a) => a.as_ptr() as *const A::Item,
-                _ => debug_unreachable!(),
-            }
-        }
-
-        #[inline] unsafe fn inline_mut(&mut self) -> *mut A::Item
-        {
-            match self
-            {
-                SmallVecData::Inline(a) => a.as_mut_ptr() as *mut A::Item,
-                _ => debug_unreachable!(),
-            }
-        }
-
-        #[inline] fn from_inline(inline: MaybeUninit<A>) -> SmallVecData<A>
-        {
-            SmallVecData::Inline(inline)
-        }
-
-        #[inline] unsafe fn into_inline(self) -> MaybeUninit<A>
-        {
-            match self {
-                SmallVecData::Inline(a) => a,
-                _ => debug_unreachable!(),
-            }
-        }
-
-        #[inline] unsafe fn heap(&self) -> (*mut A::Item, usize)
-        {
-            match self {
-                SmallVecData::Heap(data) => *data,
-                _ => debug_unreachable!(),
-            }
-        }
-
-        #[inline] unsafe fn heap_mut(&mut self) -> &mut (*mut A::Item, usize)
-        {
-            match self
-            {
-                SmallVecData::Heap(data) => data,
-                _ => debug_unreachable!(),
-            }
-        }
-
-        #[inline] fn from_heap(ptr: *mut A::Item, len: usize) -> SmallVecData<A>
-        { SmallVecData::Heap((ptr, len)) }
-    }
-
-    unsafe impl<A: Array + Send> Send for SmallVecData<A> {}
-    unsafe impl<A: Array + Sync> Sync for SmallVecData<A> {}
-    /// A `Vec`-like container that can store a small number of elements inline.
-    pub struct SmallVec<A: Array>
-    {
-        capacity: usize,
-        data: SmallVecData<A>,
-    }
-
-    impl<A: Array> SmallVec<A>
-    {
-        /// Construct an empty vector
-        #[inline] pub fn new() -> SmallVec<A>
-        {
-            assert!
-            (
-                mem::size_of::<A>() == A::size() * mem::size_of::<A::Item>()
-                &&
-                mem::align_of::<A>() >= mem::align_of::<A::Item>()
-            );
-
-            SmallVec
-            {
-                capacity: 0,
-                data: SmallVecData::from_inline(MaybeUninit::uninit()),
-            }
-        }
-        /// Construct an empty vector with capacity pre-allocated to store at least `n` elements.
-        #[inline] pub fn with_capacity(n: usize) -> Self
-        {
-            let mut v = SmallVec::new();
-            v.reserve_exact(n);
-            v
-        }
-        /// Construct a new `SmallVec` from a `Vec<A::Item>`.
-        #[inline] pub fn from_vec(mut vec: Vec<A::Item>) -> SmallVec<A>
-        {
-            if vec.capacity() <= Self::inline_capacity() {
-                unsafe {
-                    let mut data = SmallVecData::<A>::from_inline(MaybeUninit::uninit());
-                    let len = vec.len();
-                    vec.set_len(0);
-                    ptr::copy_nonoverlapping(vec.as_ptr(), data.inline_mut(), len);
-
-                    SmallVec {
-                        capacity: len,
-                        data,
-                    }
-                }
-            } else {
-                let (ptr, cap, len) = (vec.as_mut_ptr(), vec.capacity(), vec.len());
-                mem::forget(vec);
-
-                SmallVec {
-                    capacity: cap,
-                    data: SmallVecData::from_heap(ptr, len),
-                }
-            }
-        }
-        /// Constructs a new `SmallVec` on the stack from an `A` without copying elements.
-        #[inline] pub fn from_buf(buf: A) -> SmallVec<A>
-        {
-            SmallVec
-            {
-                capacity: A::size(),
-                data: SmallVecData::from_inline(MaybeUninit::new(buf)),
-            }
-        }
-        /// Constructs a new `SmallVec` on the stack from an `A` without copying elements.
-        #[inline] pub fn from_buf_and_len(buf: A, len: usize) -> SmallVec<A>
-        {
-            assert!(len <= A::size());
-            unsafe { SmallVec::from_buf_and_len_unchecked(MaybeUninit::new(buf), len) }
-        }
-        /// Constructs a new `SmallVec` on the stack from an `A` without copying elements.
-        #[inline] pub unsafe fn from_buf_and_len_unchecked(buf: MaybeUninit<A>, len: usize) -> SmallVec<A>
-        {
-            SmallVec
-            {
-                capacity: len,
-                data: SmallVecData::from_inline(buf),
-            }
-        }
-        /// Sets the length of a vector.
-        pub unsafe fn set_len(&mut self, new_len: usize)
-        {
-            let (_, len_ptr, _) = self.triple_mut();
-            *len_ptr = new_len;
-        }
-        /// The maximum number of elements this vector can hold inline
-        #[inline] fn inline_capacity() -> usize
-        {
-            if mem::size_of::<A::Item>() > 0 { A::size() }
-            else { ::usize::MAX }
-        }
-        /// The maximum number of elements this vector can hold inline
-        #[inline] pub fn inline_size(&self) -> usize { Self::inline_capacity() }
-        /// The number of elements stored in the vector
-        #[inline] pub fn len(&self) -> usize { self.triple().1 }
-        /// Returns `true` if the vector is empty
-        #[inline] pub fn is_empty(&self) -> bool { self.len() == 0 }
-        /// The number of items the vector can hold without reallocating
-        #[inline] pub fn capacity(&self) -> usize { self.triple().2 }
-        /// Returns a tuple with (data ptr, len, capacity).
-        #[inline] fn triple(&self) -> (*const A::Item, usize, usize)
-        {
-            unsafe
-            {
-                if self.spilled()
-                {
-                    let (ptr, len) = self.data.heap();
-                    (ptr, len, self.capacity)
-                }
-
-                else { (self.data.inline(), self.capacity, Self::inline_capacity()) }
-            }
-        }
-        /// Returns a tuple with (data ptr, len ptr, capacity)
-        #[inline] fn triple_mut(&mut self) -> (*mut A::Item, &mut usize, usize)
-        {
-            unsafe
-            {
-                if self.spilled()
-                {
-                    let &mut (ptr, ref mut len_ptr) = self.data.heap_mut();
-                    (ptr, len_ptr, self.capacity)
-                }
-                else
-                {
-                    (
-                        self.data.inline_mut(),
-                        &mut self.capacity,
-                        Self::inline_capacity(),
-                    )
-                }
-            }
-        }
-        /// Returns `true` if the data has spilled into a separate heap-allocated buffer.
-        #[inline] pub fn spilled(&self) -> bool { self.capacity > Self::inline_capacity() }
-        /// Creates a draining iterator that removes the specified range in the vector
-        /// and yields the removed items.
-        pub fn drain<R>(&mut self, range: R) -> Drain<'_, A> where
-        R: RangeBounds<usize>,
-        {
-            use ::ops::Bound::*;
-
-            let len = self.len();
-            let start = match range.start_bound() {
-                Included(&n) => n,
-                Excluded(&n) => n + 1,
-                Unbounded => 0,
-            };
-            let end = match range.end_bound() {
-                Included(&n) => n + 1,
-                Excluded(&n) => n,
-                Unbounded => len,
-            };
-
-            assert!(start <= end);
-            assert!(end <= len);
-
-            unsafe {
-                self.set_len(start);
-
-                let range_slice = slice::from_raw_parts_mut(self.as_mut_ptr().add(start), end - start);
-
-                Drain {
-                    tail_start: end,
-                    tail_len: len - end,
-                    iter: range_slice.iter(),
-                    vec: NonNull::from(self),
-                }
-            }
-        }
-        /// Append an item to the vector.
-        #[inline] pub fn push(&mut self, value: A::Item)
-        {
-            unsafe {
-                let (mut ptr, mut len, cap) = self.triple_mut();
-                if *len == cap {
-                    self.reserve(1);
-                    let &mut (heap_ptr, ref mut heap_len) = self.data.heap_mut();
-                    ptr = heap_ptr;
-                    len = heap_len;
-                }
-                ptr::write(ptr.add(*len), value);
-                *len += 1;
-            }
-        }
-        /// Remove an item from the end of the vector and return it, or None if empty.
-        #[inline] pub fn pop(&mut self) -> Option<A::Item>
-        {
-            unsafe {
-                let (ptr, len_ptr, _) = self.triple_mut();
-                if *len_ptr == 0 {
-                    return None;
-                }
-                let last_index = *len_ptr - 1;
-                *len_ptr = last_index;
-                Some(ptr::read(ptr.add(last_index)))
-            }
-        }
-        /// Moves all the elements of `other` into `self`, leaving `other` empty.
-        pub fn append<B>(&mut self, other: &mut SmallVec<B>) where
-        B: Array<Item = A::Item>,
-        {
-            self.extend(other.drain(..))
-        }
-        /// Re-allocate to set the capacity to `max(new_cap, inline_size())`.
-        pub fn grow(&mut self, new_cap: usize)
-        { infallible(self.try_grow(new_cap)) }
-        /// Re-allocate to set the capacity to `max(new_cap, inline_size())`.
-        pub fn try_grow(&mut self, new_cap: usize) -> Result<(), CollectionAllocErr>
-        {
-            unsafe
-            {
-                let (ptr, &mut len, cap) = self.triple_mut();
-                let unspilled = !self.spilled();
-                assert!(new_cap >= len);
-                if new_cap <= self.inline_size() {
-                    if unspilled {
-                        return Ok(());
-                    }
-                    self.data = SmallVecData::from_inline(MaybeUninit::uninit());
-                    ptr::copy_nonoverlapping(ptr, self.data.inline_mut(), len);
-                    self.capacity = len;
-                    deallocate(ptr, cap);
-                } else if new_cap != cap {
-                    let layout = layout_array::<A::Item>(new_cap)?;
-                    debug_assert!(layout.size() > 0);
-                    let new_alloc;
-                    if unspilled {
-                        new_alloc = NonNull::new(alloc::alloc(layout))
-                            .ok_or(CollectionAllocErr::AllocErr { layout })?
-                            .cast()
-                            .as_ptr();
-                        ptr::copy_nonoverlapping(ptr, new_alloc, len);
-                    } else {
-                        // This should never fail since the same succeeded
-                        // when previously allocating `ptr`.
-                        let old_layout = layout_array::<A::Item>(cap)?;
-
-                        let new_ptr = alloc::realloc(ptr as *mut u8, old_layout, layout.size());
-                        new_alloc = NonNull::new(new_ptr)
-                            .ok_or(CollectionAllocErr::AllocErr { layout })?
-                            .cast()
-                            .as_ptr();
-                    }
-                    self.data = SmallVecData::from_heap(new_alloc, len);
-                    self.capacity = new_cap;
-                }
-                Ok(())
-            }
-        }
-        /// Reserve capacity for `additional` more elements to be inserted.
-        #[inline] pub fn reserve(&mut self, additional: usize)
-        { infallible(self.try_reserve(additional)) }
-        /// Reserve capacity for `additional` more elements to be inserted.
-        pub fn try_reserve(&mut self, additional: usize) -> Result<(), CollectionAllocErr>
-        {
-            let (_, &mut len, cap) = self.triple_mut();
-            if cap - len >= additional {
-                return Ok(());
-            }
-            let new_cap = len
-                .checked_add(additional)
-                .and_then(usize::checked_next_power_of_two)
-                .ok_or(CollectionAllocErr::CapacityOverflow)?;
-            self.try_grow(new_cap)
-        }
-        /// Reserve the minimum capacity for `additional` more elements to be inserted.
-        pub fn reserve_exact(&mut self, additional: usize)
-        { infallible(self.try_reserve_exact(additional)) }
-        /// Reserve the minimum capacity for `additional` more elements to be inserted.
-        pub fn try_reserve_exact(&mut self, additional: usize) -> Result<(), CollectionAllocErr>
-        {
-            let (_, &mut len, cap) = self.triple_mut();
-            if cap - len >= additional {
-                return Ok(());
-            }
-            let new_cap = len
-                .checked_add(additional)
-                .ok_or(CollectionAllocErr::CapacityOverflow)?;
-            self.try_grow(new_cap)
-        }
-        /// Shrink the capacity of the vector as much as possible.
-        pub fn shrink_to_fit(&mut self)
-        {
-            if !self.spilled() {
-                return;
-            }
-            let len = self.len();
-            if self.inline_size() >= len {
-                unsafe {
-                    let (ptr, len) = self.data.heap();
-                    self.data = SmallVecData::from_inline(MaybeUninit::uninit());
-                    ptr::copy_nonoverlapping(ptr, self.data.inline_mut(), len);
-                    deallocate(ptr, self.capacity);
-                    self.capacity = len;
-                }
-            } else if self.capacity() > len {
-                self.grow(len);
-            }
-        }
-        /// Shorten the vector, keeping the first `len` elements and dropping the rest.
-        pub fn truncate(&mut self, len: usize)
-        {
-            unsafe {
-                let (ptr, len_ptr, _) = self.triple_mut();
-                while len < *len_ptr {
-                    let last_index = *len_ptr - 1;
-                    *len_ptr = last_index;
-                    ptr::drop_in_place(ptr.add(last_index));
-                }
-            }
-        }
-        /// Extracts a slice containing the entire vector.
-        pub fn as_slice(&self) -> &[A::Item] { self }
-        /// Extracts a mutable slice of the entire vector.
-        pub fn as_mut_slice(&mut self) -> &mut [A::Item] { self }
-        /// Remove the element at position `index`, replacing it with the last element.
-        #[inline] pub fn swap_remove(&mut self, index: usize) -> A::Item
-        {
-            let len = self.len();
-            self.swap(len - 1, index);
-            self.pop()
-            .unwrap_or_else(|| unsafe { unreachable_unchecked() })
-        }
-        /// Remove all elements from the vector.
-        #[inline] pub fn clear(&mut self) { self.truncate(0); }
-        /// Remove and return the element at position `index`, shifting all items to the left.
-        pub fn remove(&mut self, index: usize) -> A::Item
-        {
-            unsafe {
-                let (mut ptr, len_ptr, _) = self.triple_mut();
-                let len = *len_ptr;
-                assert!(index < len);
-                *len_ptr = len - 1;
-                ptr = ptr.add(index);
-                let item = ptr::read(ptr);
-                ptr::copy(ptr.add(1), ptr, len - index - 1);
-                item
-            }
-        }
-        /// Insert an element at position `index`, shifting all elements after it to the right.
-        pub fn insert(&mut self, index: usize, element: A::Item)
-        {
-            self.reserve(1);
-
-            unsafe {
-                let (mut ptr, len_ptr, _) = self.triple_mut();
-                let len = *len_ptr;
-                assert!(index <= len);
-                *len_ptr = len + 1;
-                ptr = ptr.add(index);
-                ptr::copy(ptr, ptr.add(1), len - index);
-                ptr::write(ptr, element);
-            }
-        }
-        /// Insert multiple items at position `index`, shifting all following elements to the back.
-        pub fn insert_many<I: IntoIterator<Item = A::Item>>(&mut self, index: usize, iterable: I)
-        {
-            let mut iter = iterable.into_iter();
-            if index == self.len() {
-                return self.extend(iter);
-            }
-
-            let (lower_size_bound, _) = iter.size_hint();
-            assert!(lower_size_bound <= std::isize::MAX as usize);
-            assert!(index + lower_size_bound >= index);
-
-            let mut num_added = 0;
-            let old_len = self.len();
-            assert!(index <= old_len);
-
-            unsafe
-            {
-                self.reserve(lower_size_bound);
-                let start = self.as_mut_ptr();
-                let ptr = start.add(index);
-                
-                ptr::copy(ptr, ptr.add(lower_size_bound), old_len - index);
-                
-                self.set_len(0);
-                let mut guard = DropOnPanic {
-                    start,
-                    skip: index..(index + lower_size_bound),
-                    len: old_len + lower_size_bound,
-                };
-
-                while num_added < lower_size_bound {
-                    let element = match iter.next() {
-                        Some(x) => x,
-                        None => break,
-                    };
-                    let cur = ptr.add(num_added);
-                    ptr::write(cur, element);
-                    guard.skip.start += 1;
-                    num_added += 1;
-                }
-
-                if num_added < lower_size_bound
-                {
-                    ptr::copy(
-                        ptr.add(lower_size_bound),
-                        ptr.add(num_added),
-                        old_len - index,
-                    );
-                }
-                
-                self.set_len(old_len + num_added);
-                mem::forget(guard);
-            }
-            
-            for element in iter
-            {
-                self.insert(index + num_added, element);
-                num_added += 1;
-            }
-
-            struct DropOnPanic<T>
-            {
-                start: *mut T,
-                skip: Range<usize>,
-                len: usize,
-            }
-
-            impl<T> Drop for DropOnPanic<T>
-            {
-                fn drop(&mut self)
-                {
-                    for i in 0..self.len {
-                        if !self.skip.contains(&i) {
-                            unsafe {
-                                ptr::drop_in_place(self.start.add(i));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        /// Convert a SmallVec to a Vec, without reallocating if the SmallVec has spilled onto the heap.
-        pub fn into_vec(self) -> Vec<A::Item>
-        {
-            if self.spilled()
-            {
-                unsafe
-                {
-                    let (ptr, len) = self.data.heap();
-                    let v = Vec::from_raw_parts(ptr, len, self.capacity);
-                    mem::forget(self);
-                    v
-                }
-            }
-            else { self.into_iter().collect() }
-        }
-        /// Converts a `SmallVec` into a `Box<[T]>` without reallocating if the `SmallVec` has already spilled onto the heap.
-        pub fn into_boxed_slice(self) -> Box<[A::Item]> { self.into_vec().into_boxed_slice() }
-        /// Convert the SmallVec into an `A` if possible. Otherwise return `Err(Self)`.
-        pub fn into_inner(self) -> Result<A, Self>
-        {
-            if self.spilled() || self.len() != A::size()
-            {
-                Err(self)
-            }
-            else
-            {
-                unsafe
-                {
-                    let data = ptr::read(&self.data);
-                    mem::forget(self);
-                    Ok(data.into_inline().assume_init())
-                }
-            }
-        }
-        /// Retains only the elements specified by the predicate.
-        pub fn retain<F: FnMut(&mut A::Item) -> bool>(&mut self, mut f: F)
-        {
-            let mut del = 0;
-            let len = self.len();
-            for i in 0..len {
-                if !f(&mut self[i]) {
-                    del += 1;
-                } else if del > 0 {
-                    self.swap(i - del, i);
-                }
-            }
-            self.truncate(len - del);
-        }
-        /// Removes consecutive duplicate elements.
-        pub fn dedup(&mut self) where
-        A::Item: PartialEq<A::Item>,
-        {
-            self.dedup_by(|a, b| a == b);
-        }
-        /// Removes consecutive duplicate elements using the given equality relation.
-        pub fn dedup_by<F>(&mut self, mut same_bucket: F) where
-        F: FnMut(&mut A::Item, &mut A::Item) -> bool,
-        {
-            let len = self.len();
-            if len <= 1 {
-                return;
-            }
-
-            let ptr = self.as_mut_ptr();
-            let mut w: usize = 1;
-
-            unsafe {
-                for r in 1..len {
-                    let p_r = ptr.add(r);
-                    let p_wm1 = ptr.add(w - 1);
-                    if !same_bucket(&mut *p_r, &mut *p_wm1) {
-                        if r != w {
-                            let p_w = p_wm1.add(1);
-                            mem::swap(&mut *p_r, &mut *p_w);
-                        }
-                        w += 1;
-                    }
-                }
-            }
-
-            self.truncate(w);
-        }
-        /// Removes consecutive elements that map to the same key.
-        pub fn dedup_by_key<F, K>(&mut self, mut key: F) where
-        F: FnMut(&mut A::Item) -> K,
-        K: PartialEq<K>,
-        {
-            self.dedup_by(|a, b| key(a) == key(b));
-        }
-        /// Resizes the `SmallVec` in-place so that `len` is equal to `new_len`.
-        pub fn resize_with<F>(&mut self, new_len: usize, f: F) where
-        F: FnMut() -> A::Item,
-        {
-            let old_len = self.len();
-            if old_len < new_len {
-                let mut f = f;
-                let additional = new_len - old_len;
-                self.reserve(additional);
-                for _ in 0..additional {
-                    self.push(f());
-                }
-            } else if old_len > new_len {
-                self.truncate(new_len);
-            }
-        }
-        /// Creates a `SmallVec` directly from the raw components of another `SmallVec`.
-        #[inline] pub unsafe fn from_raw_parts(ptr: *mut A::Item, length: usize, capacity: usize) -> SmallVec<A>
-        {
-            assert!(capacity > Self::inline_capacity());
-            SmallVec
-            {
-                capacity,
-                data: SmallVecData::from_heap(ptr, length),
-            }
-        }
-        /// Returns a raw pointer to the vector's buffer.
-        pub fn as_ptr(&self) -> *const A::Item { self.triple().0 }
-        /// Returns a raw mutable pointer to the vector's buffer.
-        pub fn as_mut_ptr(&mut self) -> *mut A::Item { self.triple_mut().0 }
-    }
-
-    impl<A: Array> SmallVec<A> where
-    A::Item: Copy,
-    {
-        /// Copy the elements from a slice into a new `SmallVec`.
-        pub fn from_slice(slice: &[A::Item]) -> Self
-        {
-            let len = slice.len();
-            if len <= Self::inline_capacity() {
-                SmallVec {
-                    capacity: len,
-                    data: SmallVecData::from_inline(unsafe {
-                        let mut data: MaybeUninit<A> = MaybeUninit::uninit();
-                        ptr::copy_nonoverlapping(
-                            slice.as_ptr(),
-                            data.as_mut_ptr() as *mut A::Item,
-                            len,
-                        );
-                        data
-                    }),
-                }
-            } else {
-                let mut b = slice.to_vec();
-                let (ptr, cap) = (b.as_mut_ptr(), b.capacity());
-                mem::forget(b);
-                SmallVec {
-                    capacity: cap,
-                    data: SmallVecData::from_heap(ptr, len),
-                }
-            }
-        }
-        /// Copy elements from a slice into the vector at position `index`, shifting any following
-        /// elements toward the back.
-        pub fn insert_from_slice(&mut self, index: usize, slice: &[A::Item])
-        {
-            self.reserve(slice.len());
-
-            let len = self.len();
-            assert!(index <= len);
-
-            unsafe {
-                let slice_ptr = slice.as_ptr();
-                let ptr = self.as_mut_ptr().add(index);
-                ptr::copy(ptr, ptr.add(slice.len()), len - index);
-                ptr::copy_nonoverlapping(slice_ptr, ptr, slice.len());
-                self.set_len(len + slice.len());
-            }
-        }
-        /// Copy elements from a slice and append them to the vector.
-        #[inline] pub fn extend_from_slice(&mut self, slice: &[A::Item])
-        {
-            let len = self.len();
-            self.insert_from_slice(len, slice);
-        }
-    }
-
-    impl<A: Array> SmallVec<A> where
-    A::Item: Clone,
-    {
-        /// Resizes the vector so that its length is equal to `len`.
-        pub fn resize(&mut self, len: usize, value: A::Item)
-        {
-            let old_len = self.len();
-
-            if len > old_len {
-                self.extend(repeat(value).take(len - old_len));
-            } else {
-                self.truncate(len);
-            }
-        }
-        /// Creates a `SmallVec` with `n` copies of `elem`.
-        pub fn from_elem(elem: A::Item, n: usize) -> Self
-        {
-            if n > Self::inline_capacity() {
-                vec![elem; n].into()
-            } else {
-                let mut v = SmallVec::<A>::new();
-                unsafe {
-                    let (ptr, len_ptr, _) = v.triple_mut();
-                    let mut local_len = SetLenOnDrop::new(len_ptr);
-
-                    for i in 0..n
-                    {
-                        ::ptr::write(ptr.add(i), elem.clone());
-                        local_len.increment_len(1);
-                    }
-                }
-                v
-            }
-        }
-    }
-
-    impl<A: Array> ops::Deref for SmallVec<A>
-    {
-        type Target = [A::Item];
-        #[inline] fn deref(&self) -> &[A::Item] {
-            unsafe {
-                let (ptr, len, _) = self.triple();
-                slice::from_raw_parts(ptr, len)
-            }
-        }
-    }
-
-    impl<A: Array> ops::DerefMut for SmallVec<A>
-    {
-        #[inline] fn deref_mut(&mut self) -> &mut [A::Item] {
-            unsafe {
-                let (ptr, &mut len, _) = self.triple_mut();
-                slice::from_raw_parts_mut(ptr, len)
-            }
-        }
-    }
-
-    impl<A: Array> AsRef<[A::Item]> for SmallVec<A>
-    {
-        #[inline] fn as_ref(&self) -> &[A::Item] {
-            self
-        }
-    }
-
-    impl<A: Array> AsMut<[A::Item]> for SmallVec<A>
-    {
-        #[inline] fn as_mut(&mut self) -> &mut [A::Item] {
-            self
-        }
-    }
-
-    impl<A: Array> Borrow<[A::Item]> for SmallVec<A>
-    {
-        #[inline] fn borrow(&self) -> &[A::Item] {
-            self
-        }
-    }
-
-    impl<A: Array> BorrowMut<[A::Item]> for SmallVec<A>
-    {
-        #[inline] fn borrow_mut(&mut self) -> &mut [A::Item] {
-            self
-        }
-    }
-    
-    impl<A: Array> From<Vec<A::Item>> for SmallVec<A>
-    {
-        #[inline] fn from(vec: Vec<A::Item>) -> SmallVec<A> {
-            SmallVec::from_vec(vec)
-        }
-    }
-
-    impl<A: Array> From<A> for SmallVec<A>
-    {
-        #[inline] fn from(array: A) -> SmallVec<A> {
-            SmallVec::from_buf(array)
-        }
-    }
-
-    impl<A: Array, I: SliceIndex<[A::Item]>> ops::Index<I> for SmallVec<A>
-    {
-        type Output = I::Output;
-
-        fn index(&self, index: I) -> &I::Output {
-            &(**self)[index]
-        }
-    }
-
-    impl<A: Array, I: SliceIndex<[A::Item]>> ops::IndexMut<I> for SmallVec<A>
-    {
-        fn index_mut(&mut self, index: I) -> &mut I::Output {
-            &mut (&mut **self)[index]
-        }
-    }
-
-    impl<A: Array> ExtendFromSlice<A::Item> for SmallVec<A> where
-    A::Item: Copy,
-    {
-        fn extend_from_slice(&mut self, other: &[A::Item]) { SmallVec::extend_from_slice(self, other) }
-    }
-
-    impl<A: Array> FromIterator<A::Item> for SmallVec<A>
-    {
-        #[inline] fn from_iter<I: IntoIterator<Item = A::Item>>(iterable: I) -> SmallVec<A> {
-            let mut v = SmallVec::new();
-            v.extend(iterable);
-            v
-        }
-    }
-
-    impl<A: Array> Extend<A::Item> for SmallVec<A>
-    {
-        fn extend<I: IntoIterator<Item = A::Item>>(&mut self, iterable: I)
-        {
-            let mut iter = iterable.into_iter();
-            let (lower_size_bound, _) = iter.size_hint();
-            self.reserve(lower_size_bound);
-
-            unsafe {
-                let (ptr, len_ptr, cap) = self.triple_mut();
-                let mut len = SetLenOnDrop::new(len_ptr);
-                while len.get() < cap {
-                    if let Some(out) = iter.next() {
-                        ptr::write(ptr.add(len.get()), out);
-                        len.increment_len(1);
-                    } else {
-                        return;
-                    }
-                }
-            }
-
-            for elem in iter {
-                self.push(elem);
-            }
-        }
-    }
-
-    impl<A: Array> fmt::Debug for SmallVec<A> where
-    A::Item: fmt::Debug,
-    {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.debug_list().entries(self.iter()).finish() }
-    }
-
-    impl<A: Array> Default for SmallVec<A>
-    {
-        #[inline] fn default() -> SmallVec<A> { SmallVec::new() }
-    }
-    
-    impl<A: Array> Drop for SmallVec<A>
-    {
-        fn drop(&mut self)
-        {
-            unsafe
-            {
-                if self.spilled() {
-                    let (ptr, len) = self.data.heap();
-                    Vec::from_raw_parts(ptr, len, self.capacity);
-                } else {
-                    ptr::drop_in_place(&mut self[..]);
-                }
-            }
-        }
-    }
-
-    impl<A: Array> Clone for SmallVec<A> where
-    A::Item: Clone,
-    {
-        #[inline] fn clone(&self) -> SmallVec<A> { SmallVec::from(self.as_slice()) }
-    }
-
-    impl<A: Array, B: Array> PartialEq<SmallVec<B>> for SmallVec<A> where
-    A::Item: PartialEq<B::Item>,
-    {
-        #[inline] fn eq(&self, other: &SmallVec<B>) -> bool {
-            self[..] == other[..]
-        }
-    }
-
-    impl<A: Array> Eq for SmallVec<A> where A::Item: Eq {}
-
-    impl<A: Array> PartialOrd for SmallVec<A> where
-    A::Item: PartialOrd,
-    {
-        #[inline] fn partial_cmp(&self, other: &SmallVec<A>) -> Option<cmp::Ordering>
-        { PartialOrd::partial_cmp(&**self, &**other) }
-    }
-
-    impl<A: Array> Ord for SmallVec<A> where
-    A::Item: Ord,
-    {
-        #[inline] fn cmp(&self, other: &SmallVec<A>) -> cmp::Ordering { Ord::cmp(&**self, &**other) }
-    }
-
-    impl<A: Array> Hash for SmallVec<A> where
-    A::Item: Hash,
-    {
-        fn hash<H: Hasher>(&self, state: &mut H) { (**self).hash(state) }
-    }
-
-    unsafe impl<A: Array> Send for SmallVec<A> where A::Item: Send {}
-    /// An iterator that consumes a `SmallVec` and yields its items by value.
-    pub struct IntoIter<A: Array>
-    {
-        data: SmallVec<A>,
-        current: usize,
-        end: usize,
-    }
-
-    impl<A: Array> fmt::Debug for IntoIter<A> where
-    A::Item: fmt::Debug,
-    {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
-        { f.debug_tuple("IntoIter").field(&self.as_slice()).finish() }
-    }
-
-    impl<A: Array + Clone> Clone for IntoIter<A> where
-    A::Item: Clone,
-    {
-        fn clone(&self) -> IntoIter<A> { SmallVec::from(self.as_slice()).into_iter() }
-    }
-
-    impl<A: Array> Drop for IntoIter<A>
-    {
-        fn drop(&mut self)
-        {
-            for _ in self
-            {}
-        }
-    }
-
-    impl<A: Array> Iterator for IntoIter<A>
-    {
-        type Item = A::Item;
-
-        #[inline] fn next(&mut self) -> Option<A::Item>
-        {
-            if self.current == self.end {
-                None
-            } else {
-                unsafe {
-                    let current = self.current;
-                    self.current += 1;
-                    Some(ptr::read(self.data.as_ptr().add(current)))
-                }
-            }
-        }
-
-        #[inline] fn size_hint(&self) -> (usize, Option<usize>)
-        {
-            let size = self.end - self.current;
-            (size, Some(size))
-        }
-    }
-
-    impl<A: Array> DoubleEndedIterator for IntoIter<A>
-    {
-        #[inline] fn next_back(&mut self) -> Option<A::Item>
-        {
-            if self.current == self.end {
-                None
-            } else {
-                unsafe {
-                    self.end -= 1;
-                    Some(ptr::read(self.data.as_ptr().add(self.end)))
-                }
-            }
-        }
-    }
-
-    impl<A: Array> ExactSizeIterator for IntoIter<A> {}
-    impl<A: Array> FusedIterator for IntoIter<A> {}
-
-    impl<A: Array> IntoIter<A>
-    {
-        /// Returns the remaining items of this iterator as a slice.
-        pub fn as_slice(&self) -> &[A::Item]
-        {
-            let len = self.end - self.current;
-            unsafe { ::slice::from_raw_parts(self.data.as_ptr().add(self.current), len) }
-        }
-        /// Returns the remaining items of this iterator as a mutable slice.
-        pub fn as_mut_slice(&mut self) -> &mut [A::Item]
-        {
-            let len = self.end - self.current;
-            unsafe { ::slice::from_raw_parts_mut(self.data.as_mut_ptr().add(self.current), len) }
-        }
-    }
-
-    impl<A: Array> IntoIterator for SmallVec<A>
-    {
-        type IntoIter = IntoIter<A>;
-        type Item = A::Item;
-        fn into_iter(mut self) -> Self::IntoIter
-        {
-            unsafe
-            {
-                let len = self.len();
-                self.set_len(0);
-                IntoIter {
-                    data: self,
-                    current: 0,
-                    end: len,
-                }
-            }
-        }
-    }
-
-    impl<'a, A: Array> IntoIterator for &'a SmallVec<A>
-    {
-        type IntoIter = slice::Iter<'a, A::Item>;
-        type Item = &'a A::Item;
-        fn into_iter(self) -> Self::IntoIter { self.iter() }
-    }
-
-    impl<'a, A: Array> IntoIterator for &'a mut SmallVec<A>
-    {
-        type IntoIter = slice::IterMut<'a, A::Item>;
-        type Item = &'a mut A::Item;
-        fn into_iter(self) -> Self::IntoIter { self.iter_mut() }
-    }
-    /// Types that can be used as the backing store for a SmallVec
-    pub unsafe trait Array
-    {
-        /// The type of the array's elements.
-        type Item;
-        /// Returns the number of items the array can hold.
-        fn size() -> usize;
-    }
-    /// Set the length of the vec when the `SetLenOnDrop` value goes out of scope.
-    struct SetLenOnDrop<'a>
-    {
-        len: &'a mut usize,
-        local_len: usize,
-    }
-
-    impl<'a> SetLenOnDrop<'a>
-    {
-        #[inline] fn new(len: &'a mut usize) -> Self
-        {
-            SetLenOnDrop
-            {
-                local_len: *len,
-                len,
-            }
-        }
-
-        #[inline] fn get(&self) -> usize { self.local_len }
-
-        #[inline] fn increment_len(&mut self, increment: usize) { self.local_len += increment; }
-    }
-
-    impl<'a> Drop for SetLenOnDrop<'a>
-    {
-        #[inline] fn drop(&mut self) { *self.len = self.local_len; }
-    }
-    
-    macro_rules! impl_array
-    (
-        ($($size:expr),+) => {
-            $(
-                unsafe impl<T> Array for [T; $size] {
-                    type Item = T;
-                    fn size() -> usize { $size }
-                }
-            )+
-        }
-    );
-    
-    impl_array!
-    (
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-        25, 26, 27, 28, 29, 30, 31, 32, 36, 0x40, 0x60, 0x80, 0x100, 0x200, 0x400, 0x600, 0x800, 
-        0x1000, 0x2000, 0x4000, 0x6000, 0x8000, 0x10000, 0x20000, 0x40000, 0x60000, 0x80000, 
-        0x10_0000
-    );
-    /// Convenience trait for constructing a `SmallVec`
-    pub trait ToSmallVec<A: Array>
-    {
-        /// Construct a new `SmallVec` from a slice.
-        fn to_smallvec(&self) -> SmallVec<A>;
-    }
-
-    impl<A: Array> ToSmallVec<A> for [A::Item] where
-    A::Item: Copy,
-    {
-        #[inline] fn to_smallvec(&self) -> SmallVec<A> { SmallVec::from_slice(self) }
-    }
+	pub use std::vec::{ * };
 }
-// 13694 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// 14567 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
